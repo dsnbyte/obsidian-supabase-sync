@@ -12,7 +12,7 @@ if (!tagName) {
 let prevTag = '';
 try {
   prevTag = execSync(`git describe --tags --abbrev=0 ${tagName}^ 2>/dev/null`, { encoding: 'utf-8' }).trim();
-} catch (e) {
+} catch  {
   // No previous tag found
 }
 

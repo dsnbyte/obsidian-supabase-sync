@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production"
+    "build": "node esbuild.config.mjs production",
+    "lint": "oxlint src",
+    "lint:fix": "oxlint --fix src"
   },
   "keywords": [
     "obsidian",
@@ -23,6 +25,7 @@
     "@types/node": "^20.11.0",
     "esbuild": "^0.20.0",
     "obsidian": "^1.13.0",
+    "oxlint": "^1.68.0",
     "tslib": "^2.6.2",
     "typescript": "^5.3.3"
   }
