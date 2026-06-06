@@ -50,7 +50,7 @@ const DEFAULT_SETTINGS: SupabaseSyncSettings = {
 };
 
 // TTL for auto soft-delete cleanup: files soft-deleted longer than this are hard-deleted (Fix D)
-const SOFT_DELETE_TTL_DAYS = 30;
+
 
 export default class SupabaseSyncPlugin extends Plugin {
   settings!: SupabaseSyncSettings;
@@ -1543,7 +1543,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    containerEl.createEl("h3", { text: "Supabase Setup" });
+    new Setting(containerEl).setName("Supabase Setup").setHeading();
 
     // Supabase URL Setting
     new Setting(containerEl)
@@ -1614,14 +1614,14 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
                 dbQuery = dbQuery.eq("vault_id", this.plugin.settings.vaultId);
               }
 
-              const { data: dbData, error: dbError } = await dbQuery;
+              const { error: dbError } = await dbQuery;
 
               if (dbError) {
                 throw new Error(`Database connection failed: ${dbError.message}`);
               }
 
               // 2. Test storage access
-              const { data: storageData, error: storageError } = await this.plugin.supabase.storage
+              const { error: storageError } = await this.plugin.supabase.storage
                 .from("obsidian-vault-binaries")
                 .list("", { limit: 1 });
 
@@ -1656,7 +1656,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
 
 
     // Authentication Section
-    containerEl.createEl("h3", { text: "Authentication" });
+    new Setting(containerEl).setName("Authentication").setHeading();
 
     if (this.plugin.currentUserId) {
       new Setting(containerEl)
@@ -1726,7 +1726,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
     }
 
     // Vault & Device Configuration Section
-    containerEl.createEl("h3", { text: "Vault & Device Configuration" });
+    new Setting(containerEl).setName("Vault & Device Configuration").setHeading();
 
     let textComponent: any;
     let saveButtonComponent: any;
@@ -1760,7 +1760,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
             inputEl.selectionEnd = 0;
             inputEl.setSelectionRange(0, 0);
             window.getSelection()?.removeAllRanges();
-          } catch (e) { }
+          } catch { }
         };
 
         // Set initial value
@@ -2000,7 +2000,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
       );
 
     // --- Sync Control Section ---
-    containerEl.createEl("h3", { text: "Sync Control" });
+    new Setting(containerEl).setName("Sync Control").setHeading();
 
     new Setting(containerEl)
       .setName("Sync Vault Now")
@@ -2063,7 +2063,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
       );
 
     // Server Maintenance Section
-    containerEl.createEl("h3", { text: "Server Maintenance" });
+    new Setting(containerEl).setName("Server Maintenance").setHeading();
 
     new Setting(containerEl)
       .setName("Manage Database Vaults")
@@ -2183,7 +2183,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
       );
 
     // Backup & Export
-    containerEl.createEl("h3", { text: "Backup & Export" });
+    new Setting(containerEl).setName("Backup & Export").setHeading();
 
     new Setting(containerEl)
       .setName("Include Deleted Files")
