@@ -53,6 +53,9 @@ Before using the plugin, you must configure your Supabase instance. Run the cont
 
 ## Installation in Obsidian
 
+> [!NOTE]
+> This plugin is currently undergoing review for the official Obsidian Community Plugins store. Until it is officially approved and listed, please use one of the installation methods below.
+
 To install and enable this plugin in your Obsidian vault, choose one of the following methods:
 
 ### Option A: Install via BRAT (Recommended for Beta Users)
