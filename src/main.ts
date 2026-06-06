@@ -944,9 +944,6 @@ export default class SupabaseSyncPlugin extends Plugin {
       }
     }
 
-    const author = frontmatter.author ? String(frontmatter.author) : null;
-    const status = frontmatter.status ? String(frontmatter.status) : null;
-    const category = frontmatter.category ? String(frontmatter.category) : null;
 
     // Upsert into Supabase obsidian_vault_files
     const { error } = await this.supabase!
@@ -963,9 +960,6 @@ export default class SupabaseSyncPlugin extends Plugin {
         title,
         date,
         aliases,
-        author,
-        status,
-        category,
         updated_at: new Date().toISOString(),
         deleted_at: null
       });
