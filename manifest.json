@@ -1,5 +1,5 @@
 {
-  "id": "obsidian-supabase-sync",
+  "id": "supabase-vault-sync",
   "name": "Supabase Vault Sync",
   "version": "0.1.0",
   "minAppVersion": "0.15.0",
