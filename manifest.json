@@ -1,7 +1,7 @@
 {
   "id": "supabase-vault-sync",
   "name": "Supabase Vault Sync",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "minAppVersion": "0.15.0",
   "description": "Sync your Obsidian vault notes and attachments to Supabase.",
   "author": "Dsnify",
