@@ -314,8 +314,9 @@ export default class SupabaseSyncPlugin extends Plugin {
       let defaultName = "";
       if (Platform.isDesktop) {
         try {
-          const os = require("os");
-          defaultName = os.hostname();
+          defaultName = (typeof process !== "undefined" && process.env)
+            ? (process.env.COMPUTERNAME || process.env.HOSTNAME || "")
+            : "";
         } catch (e) {
           console.warn("Failed to read hostname:", e);
         }
@@ -506,8 +507,9 @@ export default class SupabaseSyncPlugin extends Plugin {
       let defaultName = "";
       if (Platform.isDesktop) {
         try {
-          const os = require("os");
-          defaultName = os.hostname();
+          defaultName = (typeof process !== "undefined" && process.env)
+            ? (process.env.COMPUTERNAME || process.env.HOSTNAME || "")
+            : "";
         } catch (e) {
           console.warn("Failed to read hostname:", e);
         }
