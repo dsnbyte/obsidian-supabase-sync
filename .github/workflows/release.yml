@@ -1,0 +1,62 @@
+name: Create Release and Update Changelog
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Plugin
+        run: npm run build
+
+      - name: Generate Changelog and Update Repository
+        run: |
+          # Configure Git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Checkout main branch first to safely update CHANGELOG.md
+          git checkout main
+          git pull origin main
+          
+          # Run the custom Node.js script to generate release notes and update CHANGELOG.md
+          node .github/scripts/generate-changelog.js "${{ github.ref_name }}"
+          
+          # Commit and push updates to CHANGELOG.md, package.json, and manifest.json
+          git add CHANGELOG.md package.json manifest.json
+          git commit -m "chore: release ${{ github.ref_name }} and update version [skip ci]" || echo "No changes to commit"
+          git push origin main
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: /tmp/release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            main.js
+            manifest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

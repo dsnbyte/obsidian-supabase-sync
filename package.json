@@ -1,0 +1,29 @@
+{
+  "name": "obsidian-supabase-sync",
+  "version": "0.1.0",
+  "description": "Sync Obsidian vault notes to Supabase Postgres and binaries to Storage. Offline-first.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "supabase",
+    "sync",
+    "backup"
+  ],
+  "author": "Dsnify",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.107.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.20.0",
+    "obsidian": "^1.13.0",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  }
+}
