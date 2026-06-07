@@ -391,7 +391,7 @@ export async function pullRemoteChanges(plugin: SupabaseSyncPlugin): Promise<voi
 
     let fullRemoteFile = remoteFile;
     if (!remoteFile.is_binary) {
-      const { data, error: fetchErr } = await plugin.supabase!
+      const response = await plugin.supabase!
         .from("obsidian_vault_files")
         .select("*")
         .eq("user_id", plugin.currentUserId)
@@ -399,8 +399,8 @@ export async function pullRemoteChanges(plugin: SupabaseSyncPlugin): Promise<voi
         .eq("path", remoteFile.path)
         .maybeSingle();
 
-      if (fetchErr) throw fetchErr;
-      const dbFile = (data as RemoteFile | null);
+      if (response.error) throw response.error;
+      const dbFile = response.data as RemoteFile | null;
       if (!dbFile) {
         console.warn(`File not found in DB when fetching content: ${remoteFile.path}`);
         continue;

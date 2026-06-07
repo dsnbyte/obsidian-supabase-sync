@@ -24,6 +24,7 @@ export interface SupabaseSyncSettings {
   vaultId: string;
   deviceName: string;
   softDeleteTTL: number;
+  authSession?: string | null;
 }
 
 export interface RemoteFile {
@@ -50,5 +51,6 @@ export const DEFAULT_SETTINGS: SupabaseSyncSettings = {
   syncInterval: 0,
   vaultId: "",
   deviceName: "",
-  softDeleteTTL: 30
+  softDeleteTTL: 30,
+  authSession: null
 };

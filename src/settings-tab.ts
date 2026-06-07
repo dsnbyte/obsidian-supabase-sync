@@ -69,6 +69,10 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    this.render();
+  }
+
+  render(): void {
     const { containerEl } = this;
     let isSaving = false;
     let isInteracting = false;
@@ -202,7 +206,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
             .setButtonText("Log Out")
             .onClick(async () => {
               await this.plugin.signOut();
-              this.display(); // Refresh settings UI
+              this.render(); // Refresh settings UI
             })
         );
     } else {
@@ -248,7 +252,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
               button.setButtonText("Logging in...");
               try {
                 await this.plugin.signIn(email, password);
-                this.display(); // Refresh settings UI
+                this.render(); // Refresh settings UI
               } catch (e) {
                 console.error("Login failed:", e);
                 const errorMsg = e instanceof Error ? e.message : String(e);
@@ -300,7 +304,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
             inputEl.selectionEnd = 0;
             inputEl.setSelectionRange(0, 0);
             window.getSelection()?.removeAllRanges();
-          } catch (_e) {
+          } catch {
             /* Intentionally empty: selection clearing may throw in some environments */
           }
         };
@@ -578,7 +582,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText("Reset Sync")
-          .setDestructive()
+          .setWarning()
           .onClick(async () => {
             button.setDisabled(true);
             button.setButtonText("Resetting...");
@@ -796,25 +800,24 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
               sqlStatements.push(``);
 
               for (const row of filesData) {
-                const r = row as Record<string, unknown>;
                 const sql = `INSERT INTO obsidian_vault_files (
   user_id, vault_id, path, content, is_binary, mime_type, size, hash, properties,
   title, tags, created_at, updated_at, deleted_at
 ) VALUES (
-  ${this.escapeString(r.user_id as string | null)},
-  ${this.escapeString(r.vault_id as string | null)},
-  ${this.escapeString(r.path as string | null)},
-  ${this.escapeString(r.content as string | null)},
-  ${this.escapeBoolean(r.is_binary as boolean | null)},
-  ${this.escapeString(r.mime_type as string | null)},
-  ${this.escapeNumber(r.size as number | null)},
-  ${this.escapeString(r.hash as string | null)},
-  ${this.escapeJson(r.properties)},
-  ${this.escapeString(r.title as string | null)},
-  ${this.escapeTextArray(r.tags as string[] | null)},
-  ${this.escapeString(r.created_at as string | null)},
-  ${this.escapeString(r.updated_at as string | null)},
-  ${this.escapeString(r.deleted_at as string | null)}
+  ${this.escapeString(row["user_id"] as string | null)},
+  ${this.escapeString(row["vault_id"] as string | null)},
+  ${this.escapeString(row["path"] as string | null)},
+  ${this.escapeString(row["content"] as string | null)},
+  ${this.escapeBoolean(row["is_binary"] as boolean | null)},
+  ${this.escapeString(row["mime_type"] as string | null)},
+  ${this.escapeNumber(row["size"] as number | null)},
+  ${this.escapeString(row["hash"] as string | null)},
+  ${this.escapeJson(row["properties"])},
+  ${this.escapeString(row["title"] as string | null)},
+  ${this.escapeTextArray(row["tags"] as string[] | null)},
+  ${this.escapeString(row["created_at"] as string | null)},
+  ${this.escapeString(row["updated_at"] as string | null)},
+  ${this.escapeString(row["deleted_at"] as string | null)}
 ) ON CONFLICT (user_id, vault_id, path) DO UPDATE SET
   content = EXCLUDED.content,
   is_binary = EXCLUDED.is_binary,

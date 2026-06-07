@@ -31,28 +31,16 @@ jobs:
       - name: Build Plugin
         run: npm run build
 
-      - name: Attest Build Provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: main.js
-
-      - name: Generate Changelog and Update Repository
+      - name: Generate Changelog and Update Version
         run: |
-          # Configure Git
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          # Checkout main branch first to safely update CHANGELOG.md
-          git checkout main
-          git pull origin main
-          
-          # Run the custom Node.js script to generate release notes and update CHANGELOG.md
           node .github/scripts/generate-changelog.js "${{ github.ref_name }}"
-          
-          # Commit and push updates to CHANGELOG.md, package.json, and manifest.json
-          git add CHANGELOG.md package.json manifest.json
-          git commit -m "chore: release ${{ github.ref_name }} and update version [skip ci]" || echo "No changes to commit"
-          git push origin main
+
+      - name: Attest Build Provenance
+        uses: actions/attest@v1
+        with:
+          subject-path: |
+            main.js
+            manifest.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -67,3 +55,24 @@ jobs:
             manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Repository Main Branch
+        run: |
+          # Configure Git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Stash local changes to CHANGELOG.md, package.json, and manifest.json
+          git stash
+          
+          # Checkout main branch and pull
+          git checkout main
+          git pull origin main
+          
+          # Apply the stashed changes (changelog and version updates)
+          git stash pop
+          
+          # Commit and push updates to CHANGELOG.md, package.json, and manifest.json
+          git add CHANGELOG.md package.json manifest.json
+          git commit -m "chore: release ${{ github.ref_name }} and update version [skip ci]" || echo "No changes to commit"
+          git push origin main

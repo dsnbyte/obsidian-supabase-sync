@@ -42,7 +42,19 @@ async function initSupabaseClientImmediate(plugin: SupabaseSyncPlugin): Promise<
       plugin.supabase = createClient(plugin.settings.supabaseUrl, plugin.settings.supabaseKey, {
         auth: {
           persistSession: true,
-          storageKey: "obsidian-supabase-sync-auth"
+          storage: {
+            getItem: (_key: string) => {
+              return plugin.settings.authSession || null;
+            },
+            setItem: async (_key: string, value: string) => {
+              plugin.settings.authSession = value;
+              await plugin.saveSettings();
+            },
+            removeItem: async (_key: string) => {
+              plugin.settings.authSession = null;
+              await plugin.saveSettings();
+            }
+          }
         }
       });
       activeSupabaseUrl = plugin.settings.supabaseUrl;

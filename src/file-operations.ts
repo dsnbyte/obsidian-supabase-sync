@@ -1,4 +1,4 @@
-import { TFile, TAbstractFile, FileManager } from "obsidian";
+import { TFile, TAbstractFile } from "obsidian";
 import type SupabaseSyncPlugin from "./main";
 import type { RemoteFile } from "./types";
 import { getSHA256Hash, getMimeType } from "./utils";
@@ -436,7 +436,7 @@ export async function deleteLocalFileRespectingSettings(
 ): Promise<void> {
   // Use FileManager.trashFile() to respect the user's file deletion preference
   // (system trash, .trash folder, or permanent delete) as configured in Obsidian settings.
-  await (plugin.app.fileManager as FileManager).trashFile(file);
+  await plugin.app.fileManager.trashFile(file);
 }
 
 export function isLocallyModified(
