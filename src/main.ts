@@ -203,8 +203,6 @@ export default class SupabaseSyncPlugin extends Plugin {
     const oldVaultId = this.settings.vaultId;
     if (oldVaultId === newVaultId) return true;
 
-    let shouldMigrate = true;
-
     if (this.supabase && this.currentUserId) {
       try {
         // 1. Check if there are already vault files with the new Vault ID in DB
@@ -227,104 +225,12 @@ export default class SupabaseSyncPlugin extends Plugin {
               return false;
             }
           }
-          // Do not migrate/rename old vault ID in DB when switching to an existing vault
-          shouldMigrate = false;
-        } else {
-          // 2. Check if there are vault files with the old Vault ID in DB to migrate/rename
-          if (oldVaultId) {
-            const { data: oldFiles, error: oldError } = await this.supabase
-              .from("obsidian_vault_files")
-              .select("path")
-              .eq("user_id", this.currentUserId)
-              .eq("vault_id", oldVaultId)
-              .limit(1);
-
-            if (oldError) throw oldError;
-
-            if (oldFiles && oldFiles.length > 0) {
-              // 3. Check if any OTHER device (besides this one) has ever synced to the old vault.
-              //    A device that has synced at least once will have last_sync_at NOT NULL.
-              //    If such a device exists, we must NOT rename/migrate vault_id in DB to avoid
-              //    breaking other devices still pointing to the old vault ID.
-              const { data: otherSyncedDevices, error: devCheckError } = await this.supabase
-                .from("obsidian_sync_devices")
-                .select("id")
-                .eq("user_id", this.currentUserId)
-                .eq("vault_id", oldVaultId)
-                .not("id", "eq", this.deviceId ?? "")
-                .not("last_sync_at", "is", null)
-                .limit(1);
-
-              if (devCheckError) throw devCheckError;
-
-              const otherDevicesHaveSynced = otherSyncedDevices && otherSyncedDevices.length > 0;
-
-              if (otherDevicesHaveSynced) {
-                // Other devices have synced to this vault — migrating vault_id would break them.
-                // Instead, switch to a fresh sync under the new vault ID.
-                const confirmFreshSync = await showConfirm(
-                  this.app,
-                  `Other devices have already synced to vault "${oldVaultId}". Renaming the vault ID in the database would break their sync. Instead, a fresh sync will be started under the new vault ID "${newVaultId}". Your local notes will be uploaded to the new vault. Are you sure you want to proceed?`
-                );
-                if (!confirmFreshSync) {
-                  return false;
-                }
-                // Do not migrate — just switch vault ID and let the next sync handle it
-                shouldMigrate = false;
-              } else {
-                // No other device has synced — safe to rename vault_id in DB
-                const confirmRename = await showConfirm(
-                  this.app,
-                  `The vault ID in the database will be renamed from "${oldVaultId}" to "${newVaultId}". Are you sure you want to proceed?`
-                );
-                if (!confirmRename) {
-                  return false;
-                }
-                shouldMigrate = true;
-              }
-            } else {
-              shouldMigrate = false;
-            }
-          } else {
-            shouldMigrate = false;
-          }
         }
       } catch (e) {
         console.error("Failed to check existing vault files in database:", e);
         const errorMsg = e instanceof Error ? e.message : String(e);
         new Notice(`Failed to check existing vault files: ${errorMsg}. Action aborted.`);
         return false;
-      }
-    }
-
-    if (shouldMigrate && this.supabase && this.currentUserId && oldVaultId) {
-      try {
-        console.log(`Migrating database files from vault ID "${oldVaultId}" to "${newVaultId}"...`);
-
-        // Update vault_id in obsidian_vault_files
-        const { error: filesError } = await this.supabase
-          .from("obsidian_vault_files")
-          .update({ vault_id: newVaultId })
-          .eq("user_id", this.currentUserId)
-          .eq("vault_id", oldVaultId);
-
-        if (filesError) throw filesError;
-
-        // Update vault_id in obsidian_sync_devices
-        const { error: devicesError } = await this.supabase
-          .from("obsidian_sync_devices")
-          .update({ vault_id: newVaultId })
-          .eq("user_id", this.currentUserId)
-          .eq("vault_id", oldVaultId);
-
-        if (devicesError) {
-          console.warn("Could not update obsidian_sync_devices vault_id:", devicesError);
-        }
-
-        new Notice(`Migrated remote vault data to new ID: ${newVaultId}`);
-      } catch (e) {
-        console.error("Failed to migrate vault ID in remote database:", e);
-        new Notice("Warning: Failed to update vault ID in database. Saved locally, but remote files could not be migrated.");
       }
     }
 
