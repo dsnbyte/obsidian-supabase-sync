@@ -200,25 +200,14 @@ export async function uploadMarkdown(
 
   // Extract dedicated columns from frontmatter
   const title = frontmatter.title ? String(frontmatter.title) : file.basename;
-  const dateStr = frontmatter.date || frontmatter.created;
-  let date: string | null = null;
-  if (dateStr && (typeof dateStr === "string" || typeof dateStr === "number" || dateStr instanceof Date)) {
-    try {
-      const parsedDate = new Date(dateStr);
-      if (!isNaN(parsedDate.getTime())) {
-        date = parsedDate.toISOString();
-      }
-    } catch (e) {
-      console.warn(`Failed to parse frontmatter date "${dateStr}" for file ${file.path}:`, e);
-    }
-  }
 
-  let aliases: string[] = [];
-  if (frontmatter.aliases) {
-    if (Array.isArray(frontmatter.aliases)) {
-      aliases = frontmatter.aliases.map((a: unknown) => String(a));
-    } else if (typeof frontmatter.aliases === "string") {
-      aliases = frontmatter.aliases.split(",").map((a) => a.trim());
+  let tags: string[] = [];
+  const rawTags = frontmatter.tags || frontmatter.tag;
+  if (rawTags) {
+    if (Array.isArray(rawTags)) {
+      tags = rawTags.map((t: unknown) => String(t).trim()).filter(Boolean);
+    } else if (typeof rawTags === "string") {
+      tags = rawTags.split(/[\s,]+/).map((t) => t.trim()).filter(Boolean);
     }
   }
 
@@ -236,8 +225,7 @@ export async function uploadMarkdown(
       hash,
       properties: frontmatter,
       title,
-      date,
-      aliases,
+      tags,
       updated_at: new Date().toISOString(),
       deleted_at: null
     });

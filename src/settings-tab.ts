@@ -794,7 +794,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
               for (const row of filesData) {
                 const sql = `INSERT INTO obsidian_vault_files (
   user_id, vault_id, path, content, is_binary, mime_type, size, hash, properties,
-  title, date, aliases, author, status, category, created_at, updated_at, deleted_at
+  title, tags, created_at, updated_at, deleted_at
 ) VALUES (
   ${this.escapeString(row.user_id)},
   ${this.escapeString(row.vault_id)},
@@ -806,11 +806,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
   ${this.escapeString(row.hash)},
   ${this.escapeJson(row.properties)},
   ${this.escapeString(row.title)},
-  ${this.escapeString(row.date)},
-  ${this.escapeTextArray(row.aliases)},
-  ${this.escapeString(row.author)},
-  ${this.escapeString(row.status)},
-  ${this.escapeString(row.category)},
+  ${this.escapeTextArray(row.tags)},
   ${this.escapeString(row.created_at)},
   ${this.escapeString(row.updated_at)},
   ${this.escapeString(row.deleted_at)}
@@ -822,11 +818,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
   hash = EXCLUDED.hash,
   properties = EXCLUDED.properties,
   title = EXCLUDED.title,
-  date = EXCLUDED.date,
-  aliases = EXCLUDED.aliases,
-  author = EXCLUDED.author,
-  status = EXCLUDED.status,
-  category = EXCLUDED.category,
+  tags = EXCLUDED.tags,
   created_at = EXCLUDED.created_at,
   updated_at = EXCLUDED.updated_at,
   deleted_at = EXCLUDED.deleted_at;`;

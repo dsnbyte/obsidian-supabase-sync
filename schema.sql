@@ -15,11 +15,7 @@ CREATE TABLE IF NOT EXISTS obsidian_vault_files (
     
     -- Dedicated columns for standard frontmatter attributes
     title text,
-    date timestamptz,
-    aliases text[] DEFAULT '{}'::text[],
-    author text,
-    status text,
-    category text,
+    tags text[] DEFAULT '{}'::text[],
     
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
