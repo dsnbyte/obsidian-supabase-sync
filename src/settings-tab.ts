@@ -2,12 +2,10 @@ import {
   PluginSettingTab,
   Setting,
   App,
-  Notice,
-  TextComponent,
-  ButtonComponent
+  Notice
 } from "obsidian";
 import type SupabaseSyncPlugin from "./main";
-import { ManageVaultsModal } from "./modals";
+import { ManageVaultsModal, VaultSetupModal } from "./modals";
 
 // --- Settings Tab UI Implementation ---
 
@@ -74,8 +72,6 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
 
   render(): void {
     const { containerEl } = this;
-    let isSaving = false;
-    let isInteracting = false;
 
     containerEl.empty();
 
@@ -206,7 +202,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
             .setButtonText("Log Out")
             .onClick(async () => {
               await this.plugin.signOut();
-              this.render(); // Refresh settings UI
+              this.render();
             })
         );
     } else {
@@ -252,7 +248,11 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
               button.setButtonText("Logging in...");
               try {
                 await this.plugin.signIn(email, password);
-                this.render(); // Refresh settings UI
+                this.render();
+                // After login: if vault not set, open setup modal
+                if (!this.plugin.settings.vaultId) {
+                  new VaultSetupModal(this.app, this.plugin, () => this.render()).open();
+                }
               } catch (e) {
                 console.error("Login failed:", e);
                 const errorMsg = e instanceof Error ? e.message : String(e);
@@ -263,245 +263,40 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
               }
             })
         );
+
+      // Not logged in: stop rendering here — hide all other settings
+      return;
+    }
+
+    // Logged in but vault not configured yet → show warning & setup button, then stop
+    if (!this.plugin.settings.vaultId) {
+      new Setting(containerEl)
+        .setName("⚠️ Sync Not Active")
+        .setDesc("Vault setup is incomplete. Configure your vault ID and device name to start syncing.")
+        .addButton((button) =>
+          button
+            .setButtonText("Setup Vault")
+            .setCta()
+            .onClick(() => {
+              new VaultSetupModal(this.app, this.plugin, () => this.render()).open();
+            })
+        );
+      return;
     }
 
     // Vault & Device Configuration Section
     new Setting(containerEl).setName("Vault & Device Configuration").setHeading();
 
-    let textComponent: TextComponent | undefined;
-    let saveButtonComponent: ButtonComponent | undefined;
-    let editButtonComponent: ButtonComponent | undefined;
-    let updateInputStyle: () => void;
-    let clearInputSelection: () => void;
-
+    // Active vault ID & Device display — read-only with a button to open the setup modal
     new Setting(containerEl)
-      .setName("Vault ID")
-      .setDesc("A unique ID for this vault (max 10 characters). Required to sync.")
-      .addText((text) => {
-        textComponent = text;
-        const inputEl = text.inputEl;
-        inputEl.maxLength = 10;
-
-        // Helper to update cursor style based on readonly state
-        updateInputStyle = () => {
-          if (inputEl.hasAttribute("readonly")) {
-            inputEl.setCssStyles({
-              cursor: "default",
-              opacity: "0.75"
-            });
-          } else {
-            inputEl.setCssStyles({
-              cursor: "text",
-              opacity: "1"
-            });
-          }
-        };
-
-        // Helper to clear text selection robustly
-        clearInputSelection = () => {
-          try {
-            inputEl.selectionStart = 0;
-            inputEl.selectionEnd = 0;
-            inputEl.setSelectionRange(0, 0);
-            window.getSelection()?.removeAllRanges();
-          } catch {
-            /* Intentionally empty: selection clearing may throw in some environments */
-          }
-        };
-
-        // Set initial value
-        const currentVal = this.plugin.settings.vaultId;
-        text.setValue(currentVal);
-
-        // Configure initial states based on whether the value is empty
-        if (!currentVal) {
-          inputEl.removeAttribute("readonly");
-        } else {
-          inputEl.setAttribute("readonly", "true");
-        }
-        updateInputStyle();
-
-        // On input: clean the value
-        inputEl.addEventListener("input", () => {
-          let cleaned = inputEl.value.trim().substring(0, 10).replace(/[^a-zA-Z0-9-_]/g, "");
-          inputEl.value = cleaned;
-
-          updateSaveButtonState();
-        });
-
-        // Trigger edit state on double click if readonly
-        inputEl.addEventListener("dblclick", () => {
-          if (inputEl.hasAttribute("readonly")) {
-            inputEl.removeAttribute("readonly");
-            inputEl.focus();
-            saveButtonComponent?.buttonEl.show();
-            editButtonComponent?.buttonEl.hide();
-            updateSaveButtonState();
-            updateInputStyle();
-          }
-        });
-
-        // Lost focus / blur handler
-        inputEl.addEventListener("blur", () => {
-          clearInputSelection();
-
-          window.setTimeout(() => {
-            clearInputSelection();
-
-            if (isSaving || isInteracting) {
-              return;
-            }
-            const val = inputEl.value.trim();
-            if (!val) {
-              // input is empty: no readonly, show save, hide edit
-              inputEl.removeAttribute("readonly");
-              if (saveButtonComponent) saveButtonComponent.buttonEl.show();
-              if (editButtonComponent) editButtonComponent.buttonEl.hide();
-              updateSaveButtonState();
-            } else {
-              // revert if there are unsaved changes
-              if (val !== this.plugin.settings.vaultId) {
-                textComponent?.setValue(this.plugin.settings.vaultId);
-              }
-              inputEl.setAttribute("readonly", "true");
-              if (saveButtonComponent) saveButtonComponent.buttonEl.hide();
-              if (editButtonComponent) editButtonComponent.buttonEl.show();
-            }
-            updateInputStyle();
-            clearInputSelection();
-          }, 200);
-        });
-      })
-      .addButton((btn) => {
-        saveButtonComponent = btn;
-        btn.setIcon("save");
-        btn.setTooltip("Save Vault ID");
-        btn.setCta(); // Style Save button with accent color
-
-        // Initial visibility
-        if (!this.plugin.settings.vaultId) {
-          btn.buttonEl.show();
-        } else {
-          btn.buttonEl.hide();
-        }
-
-        // Mousedown to prevent input blur revert
-        btn.buttonEl.addEventListener("mousedown", () => {
-          isInteracting = true;
-        });
-
-        btn.onClick(async () => {
-          if (!textComponent) return;
-          isSaving = true;
-          const inputEl = textComponent.inputEl;
-          const cleaned = inputEl.value.trim();
-
-          if (!cleaned || cleaned === this.plugin.settings.vaultId) {
-            isSaving = false;
-            window.setTimeout(() => { isInteracting = false; }, 300);
-            return;
-          }
-
-          // Trigger confirmation logic
-          btn.setDisabled(true);
-          const success = await this.plugin.updateVaultId(cleaned);
-          btn.setDisabled(false);
-
-          if (success) {
-            inputEl.setAttribute("readonly", "true");
-            saveButtonComponent?.buttonEl.hide();
-            editButtonComponent?.buttonEl.show();
-          } else {
-            // failed / cancelled: revert and reset state
-            textComponent?.setValue(this.plugin.settings.vaultId);
-            if (!this.plugin.settings.vaultId) {
-              inputEl.removeAttribute("readonly");
-              saveButtonComponent?.buttonEl.show();
-              editButtonComponent?.buttonEl.hide();
-            } else {
-              inputEl.setAttribute("readonly", "true");
-              saveButtonComponent?.buttonEl.hide();
-              editButtonComponent?.buttonEl.show();
-            }
-          }
-          isSaving = false;
-          window.setTimeout(() => { isInteracting = false; }, 300);
-          updateSaveButtonState();
-          updateInputStyle();
-          clearInputSelection();
-        });
-      })
-      .addButton((btn) => {
-        editButtonComponent = btn;
-        btn.setIcon("pencil");
-        btn.setTooltip("Edit Vault ID");
-
-        // Initial visibility
-        if (!this.plugin.settings.vaultId) {
-          btn.buttonEl.hide();
-        } else {
-          btn.buttonEl.show();
-        }
-
-        // Mousedown to prevent input blur revert
-        btn.buttonEl.addEventListener("mousedown", () => {
-          isInteracting = true;
-        });
-
-        btn.onClick(() => {
-          if (!textComponent) return;
-          const inputEl = textComponent.inputEl;
-          inputEl.removeAttribute("readonly");
-          inputEl.focus();
-          saveButtonComponent?.buttonEl.show();
-          editButtonComponent?.buttonEl.hide();
-          updateSaveButtonState();
-          updateInputStyle();
-          // Reset isInteracting flag after any blur events have checked it
-          window.setTimeout(() => {
-            isInteracting = false;
-          }, 300);
-        });
-      });
-
-    // Helper function to update Save button state
-    const updateSaveButtonState = () => {
-      if (!textComponent || !saveButtonComponent) return;
-      const val = textComponent.inputEl.value.trim();
-      if (!val || val === this.plugin.settings.vaultId) {
-        saveButtonComponent.setDisabled(true);
-      } else {
-        saveButtonComponent.setDisabled(false);
-      }
-    };
-
-    updateSaveButtonState();
-
-    let deviceNameTimeout: number | null = null;
-
-    new Setting(containerEl)
-      .setName("Device Name")
-      .setDesc("Name to identify this device in database sync history.")
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g. My Laptop")
-          .setValue(this.plugin.settings.deviceName)
-          .onChange((value) => {
-            const cleaned = value.trim();
-
-            if (deviceNameTimeout) {
-              window.clearTimeout(deviceNameTimeout);
-            }
-
-            deviceNameTimeout = window.setTimeout(() => {
-              void (async () => {
-                if (cleaned && cleaned !== this.plugin.settings.deviceName) {
-                  this.plugin.settings.deviceName = cleaned;
-                  await this.plugin.saveSettings();
-                  await this.plugin.registerDevice();
-                }
-              })();
-            }, 1000); // 1-second debounce
+      .setName("Vault Connection")
+      .setDesc(`Connected to vault ID "${this.plugin.settings.vaultId}" as device "${this.plugin.settings.deviceName}".`)
+      .addButton((btn) =>
+        btn
+          .setButtonText("Change Vault")
+          .setIcon("pencil")
+          .onClick(() => {
+            new VaultSetupModal(this.app, this.plugin, () => this.render()).open();
           })
       );
 
@@ -521,33 +316,41 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
     // Sync Delay Setting (Debounce delay)
     new Setting(containerEl)
       .setName("Auto-Sync Delay (seconds)")
-      .setDesc("Delay in seconds to wait after a change before triggering auto-sync (debounced).")
-      .addSlider((slider) =>
-        slider
-          .setLimits(1, 30, 1)
-          .setValue(this.plugin.settings.syncDelay || 2)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.syncDelay = value;
+      .setDesc("Delay in seconds to wait after a change before triggering auto-sync (debounced). Min: 1.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "1";
+        text.inputEl.max = "300";
+        text.inputEl.style.width = "80px";
+        text.setValue(String(this.plugin.settings.syncDelay || 2));
+        text.onChange(async (value) => {
+          const num = parseInt(value, 10);
+          if (!isNaN(num) && num >= 1) {
+            this.plugin.settings.syncDelay = num;
             await this.plugin.saveSettings();
-          })
-      );
+          }
+        });
+      });
 
     // Auto-Sync Interval (seconds) Setting
     new Setting(containerEl)
       .setName("Auto-Sync Interval (seconds)")
       .setDesc("Interval in seconds to automatically sync your vault. Set to 0 to disable interval-based sync.")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 60, 1)
-          .setValue(this.plugin.settings.syncInterval || 0)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.syncInterval = value;
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "0";
+        text.inputEl.max = "86400";
+        text.inputEl.style.width = "80px";
+        text.setValue(String(this.plugin.settings.syncInterval || 0));
+        text.onChange(async (value) => {
+          const num = parseInt(value, 10);
+          if (!isNaN(num) && num >= 0) {
+            this.plugin.settings.syncInterval = num;
             await this.plugin.saveSettings();
             this.plugin.startIntervalSync();
-          })
-      );
+          }
+        });
+      });
 
     // --- Sync Control Section ---
     new Setting(containerEl).setName("Sync Control").setHeading();

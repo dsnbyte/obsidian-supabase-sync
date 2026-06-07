@@ -199,7 +199,7 @@ export default class SupabaseSyncPlugin extends Plugin {
 
   // --- Vault ID Management ---
 
-  async updateVaultId(newVaultId: string): Promise<boolean> {
+  async updateVaultId(newVaultId: string, skipConfirmForExisting = false): Promise<boolean> {
     const oldVaultId = this.settings.vaultId;
     if (oldVaultId === newVaultId) return true;
 
@@ -218,12 +218,14 @@ export default class SupabaseSyncPlugin extends Plugin {
         if (newError) throw newError;
 
         if (newFiles && newFiles.length > 0) {
-          const confirmMix = await showConfirm(
-            this.app,
-            `A vault with the ID "${newVaultId}" already exists in the database. If you proceed, synchronization will switch to the new vault ID, and your local notes will merge with the database. The old vault ID's remote data will not be changed. Are you sure you want to proceed?`
-          );
-          if (!confirmMix) {
-            return false;
+          if (!skipConfirmForExisting) {
+            const confirmMix = await showConfirm(
+              this.app,
+              `A vault with the ID "${newVaultId}" already exists in the database. If you proceed, synchronization will switch to the new vault ID, and your local notes will merge with the database. The old vault ID's remote data will not be changed. Are you sure you want to proceed?`
+            );
+            if (!confirmMix) {
+              return false;
+            }
           }
           // Do not migrate/rename old vault ID in DB when switching to an existing vault
           shouldMigrate = false;
