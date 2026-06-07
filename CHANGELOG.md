@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2026-06-07
+
+### Features
+
+* Remove unnecessary fields and add dedicated tags field (cdce44f)
+
+### Bug Fixes
+
+* Update hostname retrieval (c7b9ae4)
+* Lint and change obsidian setting headers (0496d6b)
+* Remove unnecessary db fields (b0aa650)
+
+### Other Changes
+
+* fixed some warnings (81a70f1)
+
+
 ## [1.0.0] - 2026-06-06
 
 ### Features
