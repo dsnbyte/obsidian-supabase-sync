@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-06-07
+
+### Features
+
+* Implement device name validation and improve logout confirmation in settings (0d679f5)
+* Enhance vault ID management and add vault setup modal for improved user experience (ae0a011)
+
+### Bug Fixes
+
+* Enhance vault ID migration logic to prevent sync issues with other devices (80a8b63)
+
+
 ## [1.0.8] - 2026-06-07
 
 * No significant changes in this release.
