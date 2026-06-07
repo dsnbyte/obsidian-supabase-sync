@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.8] - 2026-06-07
+
+* No significant changes in this release.
+
 ## [1.0.7] - 2026-06-07
 
 ### Bug Fixes
