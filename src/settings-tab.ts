@@ -582,6 +582,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText("Reset Sync")
+          // .setDestructive() // only works on 1.13.0
           .onClick(async () => {
             button.setDisabled(true);
             button.setButtonText("Resetting...");
