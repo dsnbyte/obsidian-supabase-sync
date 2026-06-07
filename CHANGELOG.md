@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.7] - 2026-06-07
+
+### Bug Fixes
+
+* Update minAppVersion to 1.6.6 (77efd70)
+
+
 ## [1.0.6] - 2026-06-07
 
 ### Bug Fixes
