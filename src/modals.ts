@@ -669,41 +669,6 @@ export class VaultSetupModal extends Modal {
         this.showAlert(alertContainer, "Please enter a device name.");
         return;
       }
-
-      // Check if device name already exists in DB for this vault
-      try {
-        if (this.plugin.supabase && this.plugin.currentUserId) {
-          let checkQuery = this.plugin.supabase
-            .from("obsidian_sync_devices")
-            .select("id")
-            .eq("user_id", this.plugin.currentUserId)
-            .eq("vault_id", finalVaultId)
-            .eq("device_name", this.deviceNameValue)
-            .not("last_sync_at", "is", null);
-
-          if (this.plugin.deviceId) {
-            checkQuery = checkQuery.neq("id", this.plugin.deviceId);
-          }
-
-          const { data: existingDevices, error: deviceError } = await checkQuery.limit(1);
-
-          if (deviceError) throw deviceError;
-
-          if (existingDevices && existingDevices.length > 0) {
-            this.showAlert(
-              alertContainer,
-              `Device name "${this.deviceNameValue}" is already in use for this vault. Please choose a different device name.`
-            );
-            return;
-          }
-        }
-      } catch (err) {
-        console.error("VaultSetupModal: Device name check error:", err);
-        const msg = err instanceof Error ? err.message : String(err);
-        this.showAlert(alertContainer, `Failed to check device name: ${msg}`);
-        return;
-      }
-
       // --- Save ---
       this.isSaving = true;
       saveBtn.setText("Saving…");
