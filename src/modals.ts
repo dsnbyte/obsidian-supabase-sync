@@ -91,7 +91,7 @@ export class ManageVaultsModal extends Modal {
       marginTop: "1em"
     });
 
-    this.loadVaultsData(container);
+    void this.loadVaultsData(container);
   }
 
   async loadVaultsData(container: HTMLDivElement) {
@@ -275,7 +275,7 @@ export class ManageVaultsModal extends Modal {
         fontSize: "0.85em"
       });
       deleteBtn.addEventListener("click", () => {
-        this.deleteVault(vaultId, container);
+        void this.deleteVault(vaultId, container);
       });
     }
 
@@ -443,7 +443,7 @@ export class ManageVaultsModal extends Modal {
       new Notice(`Failed to delete vault: ${errorMsg}`);
     } finally {
       // Refresh the modal content
-      this.loadVaultsData(container);
+      void this.loadVaultsData(container);
     }
   }
 }

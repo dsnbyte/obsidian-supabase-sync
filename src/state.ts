@@ -5,7 +5,7 @@ export async function loadSyncQueue(plugin: SupabaseSyncPlugin): Promise<void> {
   if (await plugin.app.vault.adapter.exists(path)) {
     try {
       const content = await plugin.app.vault.adapter.read(path);
-      plugin.syncQueue = JSON.parse(content);
+      plugin.syncQueue = JSON.parse(content) as typeof plugin.syncQueue;
     } catch (e) {
       console.error("Failed to load sync queue:", e);
       plugin.syncQueue = [];
@@ -27,7 +27,7 @@ export async function loadSyncMetadata(plugin: SupabaseSyncPlugin): Promise<void
   if (await plugin.app.vault.adapter.exists(path)) {
     try {
       const content = await plugin.app.vault.adapter.read(path);
-      plugin.syncMetadata = JSON.parse(content);
+      plugin.syncMetadata = JSON.parse(content) as typeof plugin.syncMetadata;
       if (!plugin.syncMetadata.files) {
         plugin.syncMetadata.files = {};
       }

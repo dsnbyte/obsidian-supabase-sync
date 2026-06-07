@@ -126,7 +126,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
 
               // Temporarily initialize client if not already initialized
               if (!this.plugin.supabase) {
-                this.plugin.initSupabaseClient();
+                void this.plugin.initSupabaseClient();
               }
 
               if (!this.plugin.supabase) {
@@ -300,7 +300,9 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
             inputEl.selectionEnd = 0;
             inputEl.setSelectionRange(0, 0);
             window.getSelection()?.removeAllRanges();
-          } catch { }
+          } catch (_e) {
+            /* Intentionally empty: selection clearing may throw in some environments */
+          }
         };
 
         // Set initial value
@@ -487,12 +489,14 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
               window.clearTimeout(deviceNameTimeout);
             }
 
-            deviceNameTimeout = window.setTimeout(async () => {
-              if (cleaned && cleaned !== this.plugin.settings.deviceName) {
-                this.plugin.settings.deviceName = cleaned;
-                await this.plugin.saveSettings();
-                await this.plugin.registerDevice();
-              }
+            deviceNameTimeout = window.setTimeout(() => {
+              void (async () => {
+                if (cleaned && cleaned !== this.plugin.settings.deviceName) {
+                  this.plugin.settings.deviceName = cleaned;
+                  await this.plugin.saveSettings();
+                  await this.plugin.registerDevice();
+                }
+              })();
             }, 1000); // 1-second debounce
           })
       );
@@ -574,7 +578,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
       .addButton((button) =>
         button
           .setButtonText("Reset Sync")
-          .setWarning()
+          .setDestructive()
           .onClick(async () => {
             button.setDisabled(true);
             button.setButtonText("Resetting...");
@@ -774,7 +778,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
                 throw error;
               }
 
-              const filesData = data as Record<string, any>[] | null;
+              const filesData = data as Record<string, unknown>[] | null;
               if (!filesData || filesData.length === 0) {
                 new Notice("No database records found in Supabase for this vault ID.");
                 return;
@@ -792,24 +796,25 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
               sqlStatements.push(``);
 
               for (const row of filesData) {
+                const r = row as Record<string, unknown>;
                 const sql = `INSERT INTO obsidian_vault_files (
   user_id, vault_id, path, content, is_binary, mime_type, size, hash, properties,
   title, tags, created_at, updated_at, deleted_at
 ) VALUES (
-  ${this.escapeString(row.user_id)},
-  ${this.escapeString(row.vault_id)},
-  ${this.escapeString(row.path)},
-  ${this.escapeString(row.content)},
-  ${this.escapeBoolean(row.is_binary)},
-  ${this.escapeString(row.mime_type)},
-  ${this.escapeNumber(row.size)},
-  ${this.escapeString(row.hash)},
-  ${this.escapeJson(row.properties)},
-  ${this.escapeString(row.title)},
-  ${this.escapeTextArray(row.tags)},
-  ${this.escapeString(row.created_at)},
-  ${this.escapeString(row.updated_at)},
-  ${this.escapeString(row.deleted_at)}
+  ${this.escapeString(r.user_id as string | null)},
+  ${this.escapeString(r.vault_id as string | null)},
+  ${this.escapeString(r.path as string | null)},
+  ${this.escapeString(r.content as string | null)},
+  ${this.escapeBoolean(r.is_binary as boolean | null)},
+  ${this.escapeString(r.mime_type as string | null)},
+  ${this.escapeNumber(r.size as number | null)},
+  ${this.escapeString(r.hash as string | null)},
+  ${this.escapeJson(r.properties)},
+  ${this.escapeString(r.title as string | null)},
+  ${this.escapeTextArray(r.tags as string[] | null)},
+  ${this.escapeString(r.created_at as string | null)},
+  ${this.escapeString(r.updated_at as string | null)},
+  ${this.escapeString(r.deleted_at as string | null)}
 ) ON CONFLICT (user_id, vault_id, path) DO UPDATE SET
   content = EXCLUDED.content,
   is_binary = EXCLUDED.is_binary,

@@ -400,7 +400,7 @@ export async function pullRemoteChanges(plugin: SupabaseSyncPlugin): Promise<voi
         .maybeSingle();
 
       if (fetchErr) throw fetchErr;
-      const dbFile = data as RemoteFile | null;
+      const dbFile = (data as RemoteFile | null);
       if (!dbFile) {
         console.warn(`File not found in DB when fetching content: ${remoteFile.path}`);
         continue;

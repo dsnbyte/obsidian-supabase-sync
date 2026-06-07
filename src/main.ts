@@ -151,7 +151,7 @@ export default class SupabaseSyncPlugin extends Plugin {
   // --- Settings ---
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<SupabaseSyncSettings>);
 
     // Auto-detect Device Name if not set
     if (!this.settings.deviceName) {

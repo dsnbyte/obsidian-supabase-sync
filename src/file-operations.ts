@@ -1,4 +1,4 @@
-import { TFile, TAbstractFile } from "obsidian";
+import { TFile, TAbstractFile, FileManager } from "obsidian";
 import type SupabaseSyncPlugin from "./main";
 import type { RemoteFile } from "./types";
 import { getSHA256Hash, getMimeType } from "./utils";
@@ -202,7 +202,7 @@ export async function uploadMarkdown(
   const title = frontmatter.title ? String(frontmatter.title) : file.basename;
 
   let tags: string[] = [];
-  const rawTags = frontmatter.tags || frontmatter.tag;
+  const rawTags: unknown = frontmatter.tags ?? frontmatter.tag;
   if (rawTags) {
     if (Array.isArray(rawTags)) {
       tags = rawTags.map((t: unknown) => String(t).trim()).filter(Boolean);
@@ -434,20 +434,9 @@ export async function deleteLocalFileRespectingSettings(
   plugin: SupabaseSyncPlugin,
   file: TFile
 ): Promise<void> {
-  try {
-    const vaultConfig = (plugin.app.vault as { config?: { trashOption?: string } }).config;
-    const trashOption = vaultConfig?.trashOption || "none";
-    if (trashOption === "system") {
-      await plugin.app.vault.trash(file, true);
-    } else if (trashOption === "local") {
-      await plugin.app.vault.trash(file, false);
-    } else {
-      await plugin.app.vault.delete(file);
-    }
-  } catch (e) {
-    console.warn("Failed to delete file respecting trash settings, falling back to permanent delete:", e);
-    await plugin.app.vault.delete(file);
-  }
+  // Use FileManager.trashFile() to respect the user's file deletion preference
+  // (system trash, .trash folder, or permanent delete) as configured in Obsidian settings.
+  await (plugin.app.fileManager as FileManager).trashFile(file);
 }
 
 export function isLocallyModified(

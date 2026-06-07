@@ -21,8 +21,8 @@ export async function initSupabaseClient(plugin: SupabaseSyncPlugin, debounceMs 
   }
 
   if (debounceMs > 0) {
-    initClientDebounceTimer = window.setTimeout(async () => {
-      await initSupabaseClientImmediate(plugin);
+    initClientDebounceTimer = window.setTimeout(() => {
+      void initSupabaseClientImmediate(plugin);
     }, debounceMs);
   } else {
     await initSupabaseClientImmediate(plugin);
@@ -178,7 +178,7 @@ export async function registerDevice(plugin: SupabaseSyncPlugin): Promise<void> 
 
     if (error) throw error;
     if (data) {
-      plugin.deviceId = data.id;
+      plugin.deviceId = (data as { id: string }).id;
       console.log("Device registered with ID:", plugin.deviceId);
     }
   } catch (e) {
