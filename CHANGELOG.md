@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-06-07
+
+### Bug Fixes
+
+* Resolve obsidian community plugin review issues (d4c6b72)
+
+
 ## [1.1.0] - 2026-06-07
 
 ### Features
