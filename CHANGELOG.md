@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-06-07
+
+### Bug Fixes
+
+* **ci**: Predicate-type must be provided (a204988)
+* Resolve another obsidian community plugin review issues (afb7a47)
+
+
 ## [1.0.2] - 2026-06-07
 
 ### Bug Fixes
