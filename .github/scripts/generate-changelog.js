@@ -155,7 +155,7 @@ if (fs.existsSync(manifestPath)) {
   try {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
     manifest.version = rawVersion;
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
     console.log(`Updated ${manifestPath} version to ${rawVersion}`);
   } catch (e) {
     console.error(`Error updating manifest.json:`, e);
