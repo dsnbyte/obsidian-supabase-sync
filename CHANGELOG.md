@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-06-07
+
+### Bug Fixes
+
+* Another obsidian community plugin warnings (88997dc)
+
+
 ## [1.0.3] - 2026-06-07
 
 ### Bug Fixes
