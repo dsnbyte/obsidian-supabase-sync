@@ -6,7 +6,10 @@ import {
   TAbstractFile,
   Notice,
   Platform,
-  Modal
+  Modal,
+  App,
+  TextComponent,
+  ButtonComponent
 } from "obsidian";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
@@ -36,6 +39,22 @@ interface SupabaseSyncSettings {
   vaultId: string;
   deviceName: string;
   softDeleteTTL: number;
+}
+
+interface RemoteFile {
+  path: string;
+  updated_at: string;
+  hash: string;
+  is_binary: boolean;
+  deleted_at: string | null;
+  content?: string | null;
+}
+
+interface SyncDevice {
+  vault_id: string;
+  device_name: string;
+  platform: string;
+  last_sync_at: string | null;
 }
 
 const DEFAULT_SETTINGS: SupabaseSyncSettings = {
@@ -70,6 +89,22 @@ export default class SupabaseSyncPlugin extends Plugin {
   currentUserEmail: string | null = null;
   deviceId: string | null = null;
 
+  get configDir(): string {
+    return this.app.vault.configDir;
+  }
+
+  get pluginDir(): string {
+    return `${this.configDir}/plugins/obsidian-supabase-sync`;
+  }
+
+  get syncQueuePath(): string {
+    return `${this.pluginDir}/sync-queue.json`;
+  }
+
+  get syncMetadataPath(): string {
+    return `${this.pluginDir}/sync-metadata.json`;
+  }
+
   async onload() {
     console.log("Loading Supabase Vault Sync Plugin...");
 
@@ -98,7 +133,7 @@ export default class SupabaseSyncPlugin extends Plugin {
       id: "sync-now",
       name: "Sync Vault with Supabase Now",
       callback: () => {
-        this.runSync();
+        void this.runSync();
       }
     });
 
@@ -133,7 +168,9 @@ export default class SupabaseSyncPlugin extends Plugin {
 
     // Trigger initial sync on startup
     if (this.supabase && this.currentUserId && this.settings.vaultId) {
-      setTimeout(() => this.runSync(), 5000); // Delay slightly to allow vault index to settle
+      window.setTimeout(() => {
+        void this.runSync();
+      }, 5000); // Delay slightly to allow vault index to settle
     }
 
     // Start interval sync if configured
@@ -168,7 +205,7 @@ export default class SupabaseSyncPlugin extends Plugin {
 
   private handleIntervalSync() {
     // Check if the app is hidden/minimized (very battery-friendly, especially on mobile)
-    if (document.hidden) {
+    if (activeDocument.hidden) {
       console.log("Supabase Sync: Obsidian is in the background. Skipping interval sync to save battery.");
       return;
     }
@@ -178,7 +215,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     }
 
     console.log("Supabase Sync: Triggering periodic interval sync...");
-    this.runSync();
+    void this.runSync();
   }
 
   // --- Initializers & Settings & Auth & Devices ---
@@ -446,9 +483,10 @@ export default class SupabaseSyncPlugin extends Plugin {
             shouldMigrate = false;
           }
         }
-      } catch (e: any) {
+      } catch (e) {
         console.error("Failed to check existing vault files in database:", e);
-        new Notice(`Failed to check existing vault files: ${e.message || e}. Action aborted.`);
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        new Notice(`Failed to check existing vault files: ${errorMsg}. Action aborted.`);
         return false;
       }
     }
@@ -531,7 +569,7 @@ export default class SupabaseSyncPlugin extends Plugin {
   // --- State Persistence Helpers ---
 
   async loadSyncQueue() {
-    const path = ".obsidian/plugins/obsidian-supabase-sync/sync-queue.json";
+    const path = this.syncQueuePath;
     if (await this.app.vault.adapter.exists(path)) {
       try {
         const content = await this.app.vault.adapter.read(path);
@@ -544,16 +582,16 @@ export default class SupabaseSyncPlugin extends Plugin {
   }
 
   async saveSyncQueue() {
-    const dir = ".obsidian/plugins/obsidian-supabase-sync";
+    const dir = this.pluginDir;
     if (!(await this.app.vault.adapter.exists(dir))) {
       await this.app.vault.adapter.mkdir(dir);
     }
-    const path = `${dir}/sync-queue.json`;
+    const path = this.syncQueuePath;
     await this.app.vault.adapter.write(path, JSON.stringify(this.syncQueue, null, 2));
   }
 
   async loadSyncMetadata() {
-    const path = ".obsidian/plugins/obsidian-supabase-sync/sync-metadata.json";
+    const path = this.syncMetadataPath;
     if (await this.app.vault.adapter.exists(path)) {
       try {
         const content = await this.app.vault.adapter.read(path);
@@ -569,11 +607,11 @@ export default class SupabaseSyncPlugin extends Plugin {
   }
 
   async saveSyncMetadata() {
-    const dir = ".obsidian/plugins/obsidian-supabase-sync";
+    const dir = this.pluginDir;
     if (!(await this.app.vault.adapter.exists(dir))) {
       await this.app.vault.adapter.mkdir(dir);
     }
-    const path = `${dir}/sync-metadata.json`;
+    const path = this.syncMetadataPath;
     await this.app.vault.adapter.write(path, JSON.stringify(this.syncMetadata, null, 2));
   }
 
@@ -588,7 +626,7 @@ export default class SupabaseSyncPlugin extends Plugin {
   async handleFileChange(file: TAbstractFile, action: "upload" | "delete") {
     // Ignore configuration files, sync state, and files in the .trash directory
     if (
-      file.path.startsWith(".obsidian") ||
+      file.path.startsWith(this.configDir) ||
       file.path.startsWith(".trash") ||
       file.path.includes("/.trash/") ||
       file.path.includes("sync-queue") ||
@@ -652,8 +690,9 @@ export default class SupabaseSyncPlugin extends Plugin {
   }
 
   async handleFileRename(file: TAbstractFile, oldPath: string) {
-    const isOldIgnored = oldPath.startsWith(".obsidian") || oldPath.startsWith(".trash") || oldPath.includes("/.trash/");
-    const isNewIgnored = file.path.startsWith(".obsidian") || file.path.startsWith(".trash") || file.path.includes("/.trash/");
+    const configDir = this.configDir;
+    const isOldIgnored = oldPath.startsWith(configDir) || oldPath.startsWith(".trash") || oldPath.includes("/.trash/");
+    const isNewIgnored = file.path.startsWith(configDir) || file.path.startsWith(".trash") || file.path.includes("/.trash/");
 
     if (isOldIgnored && isNewIgnored) {
       return;
@@ -747,7 +786,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     if (this.settings.syncOnSave) {
       const delayMs = (this.settings.syncDelay || 2) * 1000;
       this.debounceTimer = window.setTimeout(() => {
-        this.runSync();
+        void this.runSync();
       }, delayMs);
     }
   }
@@ -817,7 +856,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     const thresholdDate = new Date(Date.now() - ttlDays * 24 * 3600 * 1000).toISOString();
 
     try {
-      const { data: filesToDelete, error: fetchError } = await this.supabase
+      const { data, error: fetchError } = await this.supabase
         .from("obsidian_vault_files")
         .select("path, is_binary")
         .eq("user_id", this.currentUserId)
@@ -830,6 +869,7 @@ export default class SupabaseSyncPlugin extends Plugin {
         return;
       }
 
+      const filesToDelete = data as { path: string; is_binary: boolean }[] | null;
       if (!filesToDelete || filesToDelete.length === 0) return;
 
       console.log(`Auto-cleanup: Hard-deleting ${filesToDelete.length} expired soft-deleted file(s)...`);
@@ -933,14 +973,24 @@ export default class SupabaseSyncPlugin extends Plugin {
     const frontmatter = fileCache?.frontmatter || {};
 
     // Extract dedicated columns from frontmatter
-    const title = frontmatter.title || file.basename;
+    const title = frontmatter.title ? String(frontmatter.title) : file.basename;
     const dateStr = frontmatter.date || frontmatter.created;
-    const date = dateStr ? new Date(dateStr).toISOString() : null;
+    let date: string | null = null;
+    if (dateStr && (typeof dateStr === "string" || typeof dateStr === "number" || dateStr instanceof Date)) {
+      try {
+        const parsedDate = new Date(dateStr);
+        if (!isNaN(parsedDate.getTime())) {
+          date = parsedDate.toISOString();
+        }
+      } catch (e) {
+        console.warn(`Failed to parse frontmatter date "${dateStr}" for file ${file.path}:`, e);
+      }
+    }
 
     let aliases: string[] = [];
     if (frontmatter.aliases) {
       if (Array.isArray(frontmatter.aliases)) {
-        aliases = frontmatter.aliases.map((a: any) => String(a));
+        aliases = frontmatter.aliases.map((a: unknown) => String(a));
       } else if (typeof frontmatter.aliases === "string") {
         aliases = frontmatter.aliases.split(",").map((a) => a.trim());
       }
@@ -1028,12 +1078,12 @@ export default class SupabaseSyncPlugin extends Plugin {
     // If it's a binary file, delete from Supabase Storage
     if (isBinary) {
       const storagePath = `${this.currentUserId}/${this.settings.vaultId}/${path}`;
-      const { error: storageError } = await this.supabase!.storage
+      const { error: storageError } = await this.supabase.storage
         .from("obsidian-vault-binaries")
         .remove([storagePath]);
 
       // Ignore resource not found errors for storage deletion
-      if (storageError && !(storageError as any).message?.includes("Object not found")) {
+      if (storageError && !(storageError as { message?: string }).message?.includes("Object not found")) {
         throw storageError;
       }
     }
@@ -1045,7 +1095,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     if (!shouldHardDelete && !isBinary) {
       // Fetch current database content to check if it's empty
       try {
-        const { data: dbFile } = await this.supabase!
+        const { data } = await this.supabase
           .from("obsidian_vault_files")
           .select("content, size")
           .eq("user_id", this.currentUserId)
@@ -1053,6 +1103,7 @@ export default class SupabaseSyncPlugin extends Plugin {
           .eq("path", path)
           .maybeSingle();
 
+        const dbFile = data as { content: string | null; size: number } | null;
         if (dbFile && (dbFile.content === "" || dbFile.content === null || dbFile.size === 0)) {
           shouldHardDelete = true;
         }
@@ -1063,7 +1114,7 @@ export default class SupabaseSyncPlugin extends Plugin {
 
     if (shouldHardDelete) {
       console.log(`Hard-deleting empty file from database: ${path}`);
-      const { error: dbError } = await this.supabase!
+      const { error: dbError } = await this.supabase
         .from("obsidian_vault_files")
         .delete()
         .eq("user_id", this.currentUserId)
@@ -1074,7 +1125,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     } else {
       console.log(`Soft-deleting file in database: ${path}`);
       // Soft delete in Postgres so that we can notify other sync clients of the deletion
-      const { error: dbError } = await this.supabase!
+      const { error: dbError } = await this.supabase
         .from("obsidian_vault_files")
         .update({
           deleted_at: new Date().toISOString(),
@@ -1098,7 +1149,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     console.log("Fetching remote file list from Supabase...");
 
     // Retrieve metadata for all files in the database
-    const { data: remoteFiles, error } = await this.supabase!
+    const { data, error } = await this.supabase!
       .from("obsidian_vault_files")
       .select("path, updated_at, hash, is_binary, deleted_at")
       .eq("user_id", this.currentUserId)
@@ -1106,10 +1157,12 @@ export default class SupabaseSyncPlugin extends Plugin {
 
     if (error) throw error;
 
+    const remoteFiles: RemoteFile[] | null = data as RemoteFile[] | null;
+
     // Connection successful! Check for project changes or empty remote data.
     const currentUrl = this.settings.supabaseUrl;
     const isFirstSyncToProject = !this.syncMetadata.lastSyncedUrl || this.syncMetadata.lastSyncedUrl !== currentUrl;
-    const activeRemoteFiles = remoteFiles || [];
+    const activeRemoteFiles: RemoteFile[] = remoteFiles || [];
 
     if (isFirstSyncToProject) {
       console.log(`First-time connection to new project URL verified successfully: ${currentUrl}. Resetting local sync tracking metadata.`);
@@ -1255,7 +1308,7 @@ export default class SupabaseSyncPlugin extends Plugin {
 
       let fullRemoteFile = remoteFile;
       if (!remoteFile.is_binary) {
-        const { data: dbFile, error: fetchErr } = await this.supabase!
+        const { data, error: fetchErr } = await this.supabase!
           .from("obsidian_vault_files")
           .select("*")
           .eq("user_id", this.currentUserId)
@@ -1264,6 +1317,7 @@ export default class SupabaseSyncPlugin extends Plugin {
           .maybeSingle();
 
         if (fetchErr) throw fetchErr;
+        const dbFile = data as RemoteFile | null;
         if (!dbFile) {
           console.warn(`File not found in DB when fetching content: ${remoteFile.path}`);
           continue;
@@ -1321,7 +1375,8 @@ export default class SupabaseSyncPlugin extends Plugin {
 
   async deleteLocalFileRespectingSettings(file: TFile) {
     try {
-      const trashOption = (this.app.vault as any).config?.trashOption || "none";
+      const vaultConfig = (this.app.vault as { config?: { trashOption?: string } }).config;
+      const trashOption = vaultConfig?.trashOption || "none";
       if (trashOption === "system") {
         await this.app.vault.trash(file, true);
       } else if (trashOption === "local") {
@@ -1335,7 +1390,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     }
   }
 
-  async writeRemoteFileToLocal(remoteFile: any) {
+  async writeRemoteFileToLocal(remoteFile: RemoteFile) {
     const path = remoteFile.path;
 
     // Ensure parent directories exist
@@ -1374,10 +1429,11 @@ export default class SupabaseSyncPlugin extends Plugin {
     } else {
       // Write markdown file
       const file = this.app.vault.getAbstractFileByPath(path);
+      const content = remoteFile.content ?? "";
       if (file instanceof TFile) {
-        await this.app.vault.modify(file, remoteFile.content);
+        await this.app.vault.modify(file, content);
       } else {
-        await this.app.vault.create(path, remoteFile.content);
+        await this.app.vault.create(path, content);
       }
 
       const stat = await this.app.vault.adapter.stat(path);
@@ -1399,7 +1455,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     for (const file of files) {
       // Ignore configuration files, sync state, and files in the .trash directory
       if (
-        file.path.startsWith(".obsidian") ||
+        file.path.startsWith(this.configDir) ||
         file.path.startsWith(".trash") ||
         file.path.includes("/.trash/") ||
         file.path.includes("sync-queue") ||
@@ -1485,7 +1541,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
   plugin: SupabaseSyncPlugin;
   includeDeletedInExport = false;
 
-  constructor(app: any, plugin: SupabaseSyncPlugin) {
+  constructor(app: App, plugin: SupabaseSyncPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -1505,7 +1561,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
     return String(val);
   }
 
-  private escapeJson(val: any): string {
+  private escapeJson(val: unknown): string {
     if (val === null || val === undefined) return "NULL";
     try {
       const jsonStr = JSON.stringify(val);
@@ -1529,12 +1585,12 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
   private triggerDownload(fileName: string, content: string): void {
     const blob = new Blob([content], { type: "application/sql" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = activeDocument.createElement("a");
     a.href = url;
     a.download = fileName;
-    document.body.appendChild(a);
+    activeDocument.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    activeDocument.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 
@@ -1632,9 +1688,10 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
               }
 
               new Notice("Connection test successful! Both Database and Storage are fully accessible.");
-            } catch (err: any) {
+            } catch (err) {
               console.error("Connection test failed:", err);
-              new Notice(`Connection test failed: ${err.message || err}`);
+              const errorMsg = err instanceof Error ? err.message : String(err);
+              new Notice(`Connection test failed: ${errorMsg}`);
             } finally {
               button.setDisabled(false);
               button.setButtonText("Test Connection");
@@ -1643,11 +1700,13 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
       );
 
     const descEl = containerEl.createEl("p");
-    descEl.style.fontSize = "0.8em";
-    descEl.style.marginTop = "12px";
-    descEl.style.marginBottom = "15px";
-    descEl.style.paddingLeft = "15px";
-    descEl.style.color = "var(--text-muted)";
+    descEl.setCssStyles({
+      fontSize: "0.8em",
+      marginTop: "12px",
+      marginBottom: "15px",
+      paddingLeft: "15px",
+      color: "var(--text-muted)"
+    });
 
     descEl.createEl("span", { text: "First time using this plugin? You must set up your database first. Read the " });
     descEl.createEl("a", {
@@ -1716,9 +1775,10 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
               try {
                 await this.plugin.signIn(email, password);
                 this.display(); // Refresh settings UI
-              } catch (e: any) {
+              } catch (e) {
                 console.error("Login failed:", e);
-                new Notice(`Login failed: ${e.message || e}`);
+                const errorMsg = e instanceof Error ? e.message : String(e);
+                new Notice(`Login failed: ${errorMsg}`);
               } finally {
                 button.setDisabled(false);
                 button.setButtonText("Log In");
@@ -1730,9 +1790,9 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
     // Vault & Device Configuration Section
     new Setting(containerEl).setName("Vault & Device Configuration").setHeading();
 
-    let textComponent: any;
-    let saveButtonComponent: any;
-    let editButtonComponent: any;
+    let textComponent: TextComponent | undefined;
+    let saveButtonComponent: ButtonComponent | undefined;
+    let editButtonComponent: ButtonComponent | undefined;
     let updateInputStyle: () => void;
     let clearInputSelection: () => void;
 
@@ -1747,11 +1807,15 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
         // Helper to update cursor style based on readonly state
         updateInputStyle = () => {
           if (inputEl.hasAttribute("readonly")) {
-            inputEl.style.cursor = "default";
-            inputEl.style.opacity = "0.75";
+            inputEl.setCssStyles({
+              cursor: "default",
+              opacity: "0.75"
+            });
           } else {
-            inputEl.style.cursor = "text";
-            inputEl.style.opacity = "1";
+            inputEl.setCssStyles({
+              cursor: "text",
+              opacity: "1"
+            });
           }
         };
 
@@ -1790,8 +1854,8 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
           if (inputEl.hasAttribute("readonly")) {
             inputEl.removeAttribute("readonly");
             inputEl.focus();
-            saveButtonComponent.buttonEl.show();
-            editButtonComponent.buttonEl.hide();
+            saveButtonComponent?.buttonEl.show();
+            editButtonComponent?.buttonEl.hide();
             updateSaveButtonState();
             updateInputStyle();
           }
@@ -1801,7 +1865,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
         inputEl.addEventListener("blur", () => {
           clearInputSelection();
 
-          setTimeout(() => {
+          window.setTimeout(() => {
             clearInputSelection();
 
             if (isSaving || isInteracting) {
@@ -1817,7 +1881,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
             } else {
               // revert if there are unsaved changes
               if (val !== this.plugin.settings.vaultId) {
-                textComponent.setValue(this.plugin.settings.vaultId);
+                textComponent?.setValue(this.plugin.settings.vaultId);
               }
               inputEl.setAttribute("readonly", "true");
               if (saveButtonComponent) saveButtonComponent.buttonEl.hide();
@@ -1847,13 +1911,14 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
         });
 
         btn.onClick(async () => {
+          if (!textComponent) return;
           isSaving = true;
           const inputEl = textComponent.inputEl;
           const cleaned = inputEl.value.trim();
 
           if (!cleaned || cleaned === this.plugin.settings.vaultId) {
             isSaving = false;
-            setTimeout(() => { isInteracting = false; }, 300);
+            window.setTimeout(() => { isInteracting = false; }, 300);
             return;
           }
 
@@ -1864,23 +1929,23 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
 
           if (success) {
             inputEl.setAttribute("readonly", "true");
-            saveButtonComponent.buttonEl.hide();
-            editButtonComponent.buttonEl.show();
+            saveButtonComponent?.buttonEl.hide();
+            editButtonComponent?.buttonEl.show();
           } else {
             // failed / cancelled: revert and reset state
-            textComponent.setValue(this.plugin.settings.vaultId);
+            textComponent?.setValue(this.plugin.settings.vaultId);
             if (!this.plugin.settings.vaultId) {
               inputEl.removeAttribute("readonly");
-              saveButtonComponent.buttonEl.show();
-              editButtonComponent.buttonEl.hide();
+              saveButtonComponent?.buttonEl.show();
+              editButtonComponent?.buttonEl.hide();
             } else {
               inputEl.setAttribute("readonly", "true");
-              saveButtonComponent.buttonEl.hide();
-              editButtonComponent.buttonEl.show();
+              saveButtonComponent?.buttonEl.hide();
+              editButtonComponent?.buttonEl.show();
             }
           }
           isSaving = false;
-          setTimeout(() => { isInteracting = false; }, 300);
+          window.setTimeout(() => { isInteracting = false; }, 300);
           updateSaveButtonState();
           updateInputStyle();
           clearInputSelection();
@@ -1904,15 +1969,16 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
         });
 
         btn.onClick(() => {
+          if (!textComponent) return;
           const inputEl = textComponent.inputEl;
           inputEl.removeAttribute("readonly");
           inputEl.focus();
-          saveButtonComponent.buttonEl.show();
-          editButtonComponent.buttonEl.hide();
+          saveButtonComponent?.buttonEl.show();
+          editButtonComponent?.buttonEl.hide();
           updateSaveButtonState();
           updateInputStyle();
           // Reset isInteracting flag after any blur events have checked it
-          setTimeout(() => {
+          window.setTimeout(() => {
             isInteracting = false;
           }, 300);
         });
@@ -2054,9 +2120,10 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
               new Notice(
                 "Sync state reset. Next sync will re-scan and safely merge all files."
               );
-            } catch (err: any) {
+            } catch (err) {
               console.error("Reset sync failed:", err);
-              new Notice(`Reset failed: ${err.message || err}`);
+              const errorMsg = err instanceof Error ? err.message : String(err);
+              new Notice(`Reset failed: ${errorMsg}`);
             } finally {
               button.setDisabled(false);
               button.setButtonText("Reset Sync");
@@ -2144,10 +2211,11 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
               }
 
               // 1. Fetch soft-deleted records older than the threshold
-              const { data: filesToDelete, error: fetchError } = await query;
+              const { data, error: fetchError } = await query;
 
               if (fetchError) throw fetchError;
 
+              const filesToDelete = data as { path: string; is_binary: boolean }[] | null;
               if (!filesToDelete || filesToDelete.length === 0) {
                 new Notice("No soft-deleted files matched the criteria.");
                 return;
@@ -2174,9 +2242,10 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
               if (deleteError) throw deleteError;
 
               new Notice(`Successfully permanently deleted ${pathsToDelete.length} soft-deleted file(s) from Supabase.`);
-            } catch (err: any) {
+            } catch (err) {
               console.error("Cleanup failed:", err);
-              new Notice(`Cleanup failed: ${err.message || err}`);
+              const errorMsg = err instanceof Error ? err.message : String(err);
+              new Notice(`Cleanup failed: ${errorMsg}`);
             } finally {
               button.setDisabled(false);
               button.setButtonText("Clean Up Now");
@@ -2231,7 +2300,8 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
                 throw error;
               }
 
-              if (!data || data.length === 0) {
+              const filesData = data as Record<string, any>[] | null;
+              if (!filesData || filesData.length === 0) {
                 new Notice("No database records found in Supabase for this vault ID.");
                 return;
               }
@@ -2244,10 +2314,10 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
               sqlStatements.push(`-- User ID: ${this.plugin.currentUserId}`);
               sqlStatements.push(`-- Generated At: ${new Date().toISOString()}`);
               sqlStatements.push(`-- Include Deleted Files: ${this.includeDeletedInExport}`);
-              sqlStatements.push(`-- Total Records: ${data.length}`);
+              sqlStatements.push(`-- Total Records: ${filesData.length}`);
               sqlStatements.push(``);
 
-              for (const row of data) {
+              for (const row of filesData) {
                 const sql = `INSERT INTO obsidian_vault_files (
   user_id, vault_id, path, content, is_binary, mime_type, size, hash, properties,
   title, date, aliases, author, status, category, created_at, updated_at, deleted_at
@@ -2296,7 +2366,7 @@ class SupabaseSyncSettingTab extends PluginSettingTab {
 
               this.triggerDownload(fileName, sqlContent);
               new Notice(`Database exported successfully as ${fileName}!`);
-            } catch (err: any) {
+            } catch (err) {
               console.error("Database export failed:", err);
               new Notice("Failed to export database: Query error. Check console for details.");
             } finally {
@@ -2313,7 +2383,7 @@ class ConfirmModal extends Modal {
   private onSubmit: (result: boolean) => void;
   private result = false;
 
-  constructor(app: any, message: string, onSubmit: (result: boolean) => void) {
+  constructor(app: App, message: string, onSubmit: (result: boolean) => void) {
     super(app);
     this.message = message;
     this.onSubmit = onSubmit;
@@ -2324,14 +2394,18 @@ class ConfirmModal extends Modal {
     this.setTitle("Confirm Action");
 
     const messageEl = contentEl.createEl("p", { text: this.message });
-    messageEl.style.whiteSpace = "pre-wrap";
-    messageEl.style.margin = "1em 0";
+    messageEl.setCssStyles({
+      whiteSpace: "pre-wrap",
+      margin: "1em 0"
+    });
 
     const buttonContainer = contentEl.createDiv();
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.justifyContent = "flex-end";
-    buttonContainer.style.gap = "10px";
-    buttonContainer.style.marginTop = "1.5em";
+    buttonContainer.setCssStyles({
+      display: "flex",
+      justifyContent: "flex-end",
+      gap: "10px",
+      marginTop: "1.5em"
+    });
 
     const cancelButton = buttonContainer.createEl("button", { text: "Cancel" });
     cancelButton.addEventListener("click", () => {
@@ -2357,7 +2431,7 @@ class ConfirmModal extends Modal {
 class ManageVaultsModal extends Modal {
   plugin: SupabaseSyncPlugin;
 
-  constructor(app: any, plugin: SupabaseSyncPlugin) {
+  constructor(app: App, plugin: SupabaseSyncPlugin) {
     super(app);
     this.plugin = plugin;
   }
@@ -2367,13 +2441,17 @@ class ManageVaultsModal extends Modal {
     contentEl.empty();
 
     // Set modal size/styles
-    this.modalEl.style.width = "650px";
-    this.modalEl.style.maxWidth = "90vw";
+    this.modalEl.setCssStyles({
+      width: "650px",
+      maxWidth: "90vw"
+    });
 
     this.setTitle("Manage Database Vaults");
 
     const container = contentEl.createDiv();
-    container.style.marginTop = "1em";
+    container.setCssStyles({
+      marginTop: "1em"
+    });
 
     this.loadVaultsData(container);
   }
@@ -2384,9 +2462,11 @@ class ManageVaultsModal extends Modal {
     // Loading state
     const loadingEl = container.createDiv();
     loadingEl.setText("Loading vaults from Supabase database...");
-    loadingEl.style.color = "var(--text-muted)";
-    loadingEl.style.padding = "20px";
-    loadingEl.style.textAlign = "center";
+    loadingEl.setCssStyles({
+      color: "var(--text-muted)",
+      padding: "20px",
+      textAlign: "center"
+    });
 
     try {
       if (!this.plugin.supabase || !this.plugin.currentUserId) {
@@ -2394,20 +2474,24 @@ class ManageVaultsModal extends Modal {
       }
 
       // 1. Fetch devices for current user
-      const { data: devices, error: devicesError } = await this.plugin.supabase
+      const { data: devicesRaw, error: devicesError } = await this.plugin.supabase
         .from("obsidian_sync_devices")
         .select("vault_id, device_name, platform, last_sync_at")
         .eq("user_id", this.plugin.currentUserId);
 
       if (devicesError) throw devicesError;
 
+      const devices = devicesRaw as SyncDevice[] | null;
+
       // 2. Fetch all vault_ids from vault_files
-      const { data: filesData, error: filesError } = await this.plugin.supabase
+      const { data: filesDataRaw, error: filesError } = await this.plugin.supabase
         .from("obsidian_vault_files")
         .select("vault_id")
         .eq("user_id", this.plugin.currentUserId);
 
       if (filesError) throw filesError;
+
+      const filesData = filesDataRaw as Array<{ vault_id: string }> | null;
 
       // Aggregate unique vault IDs
       const vaultIds = new Set<string>();
@@ -2415,10 +2499,10 @@ class ManageVaultsModal extends Modal {
         vaultIds.add(this.plugin.settings.vaultId);
       }
       if (devices) {
-        devices.forEach((d: any) => vaultIds.add(d.vault_id));
+        devices.forEach((d) => vaultIds.add(d.vault_id));
       }
       if (filesData) {
-        filesData.forEach((f: any) => vaultIds.add(f.vault_id));
+        filesData.forEach((f) => vaultIds.add(f.vault_id));
       }
 
       // Convert Set to Array and sort: current vault first, then alphabetical
@@ -2438,9 +2522,11 @@ class ManageVaultsModal extends Modal {
 
       // Create list container
       const listContainer = container.createDiv();
-      listContainer.style.display = "flex";
-      listContainer.style.flexDirection = "column";
-      listContainer.style.gap = "15px";
+      listContainer.setCssStyles({
+        display: "flex",
+        flexDirection: "column",
+        gap: "15px"
+      });
 
       for (const vaultId of sortedVaultIds) {
         // Fetch note count (raw SQL / PostgREST count query)
@@ -2466,24 +2552,27 @@ class ManageVaultsModal extends Modal {
         if (binaryError) console.warn(`Failed to count binaries for vault ${vaultId}:`, binaryError);
 
         // Filter devices for this vault
-        const vaultDevices = (devices || []).filter((d: any) => d.vault_id === vaultId);
+        const vaultDevices = (devices || []).filter((d) => d.vault_id === vaultId);
 
         this.renderVaultItem(listContainer, vaultId, vaultDevices, noteCount || 0, binaryCount || 0, container);
       }
 
-    } catch (err: any) {
+    } catch (err) {
       loadingEl.remove();
       const errorEl = container.createDiv();
-      errorEl.setText(`Failed to load vaults: ${err.message || err}`);
-      errorEl.style.color = "var(--text-error)";
-      errorEl.style.padding = "10px";
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      errorEl.setText(`Failed to load vaults: ${errorMsg}`);
+      errorEl.setCssStyles({
+        color: "var(--text-error)",
+        padding: "10px"
+      });
     }
   }
 
   renderVaultItem(
     parent: HTMLDivElement,
     vaultId: string,
-    devices: any[],
+    devices: SyncDevice[],
     noteCount: number,
     binaryCount: number,
     container: HTMLDivElement
@@ -2492,49 +2581,61 @@ class ManageVaultsModal extends Modal {
 
     // Create a beautiful premium card
     const card = parent.createDiv();
-    card.style.border = isCurrentVault ? "1px solid var(--interactive-accent)" : "1px solid var(--border-color)";
-    card.style.borderRadius = "8px";
-    card.style.padding = "15px";
-    card.style.backgroundColor = "var(--background-secondary)";
-    card.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.05)";
-    card.style.display = "flex";
-    card.style.flexDirection = "column";
-    card.style.gap = "10px";
-    card.style.position = "relative";
+    card.setCssStyles({
+      border: isCurrentVault ? "1px solid var(--interactive-accent)" : "1px solid var(--border-color)",
+      borderRadius: "8px",
+      padding: "15px",
+      backgroundColor: "var(--background-secondary)",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.05)",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+      position: "relative"
+    });
 
     // Header line inside the card (Vault ID + Current Badge + Delete Button)
     const headerLine = card.createDiv();
-    headerLine.style.display = "flex";
-    headerLine.style.justifyContent = "space-between";
-    headerLine.style.alignItems = "center";
+    headerLine.setCssStyles({
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    });
 
     const titleContainer = headerLine.createDiv();
-    titleContainer.style.display = "flex";
-    titleContainer.style.alignItems = "center";
-    titleContainer.style.gap = "8px";
+    titleContainer.setCssStyles({
+      display: "flex",
+      alignItems: "center",
+      gap: "8px"
+    });
 
     const vaultIdEl = titleContainer.createEl("span", { text: vaultId });
-    vaultIdEl.style.fontWeight = "bold";
-    vaultIdEl.style.fontSize = "1.1em";
-    vaultIdEl.style.color = isCurrentVault ? "var(--text-accent)" : "var(--text-normal)";
+    vaultIdEl.setCssStyles({
+      fontWeight: "bold",
+      fontSize: "1.1em",
+      color: isCurrentVault ? "var(--text-accent)" : "var(--text-normal)"
+    });
 
     if (isCurrentVault) {
       const badge = titleContainer.createEl("span", { text: "active vault" });
-      badge.style.fontSize = "0.75em";
-      badge.style.padding = "2px 6px";
-      badge.style.borderRadius = "4px";
-      badge.style.backgroundColor = "var(--interactive-accent)";
-      badge.style.color = "var(--text-on-accent)";
-      badge.style.fontWeight = "600";
-      badge.style.textTransform = "uppercase";
+      badge.setCssStyles({
+        fontSize: "0.75em",
+        padding: "2px 6px",
+        borderRadius: "4px",
+        backgroundColor: "var(--interactive-accent)",
+        color: "var(--text-on-accent)",
+        fontWeight: "600",
+        textTransform: "uppercase"
+      });
     }
 
     // Delete Button (ONLY if not current vault)
     if (!isCurrentVault) {
       const deleteBtn = headerLine.createEl("button", { text: "Delete Vault" });
       deleteBtn.addClass("mod-warning");
-      deleteBtn.style.padding = "4px 8px";
-      deleteBtn.style.fontSize = "0.85em";
+      deleteBtn.setCssStyles({
+        padding: "4px 8px",
+        fontSize: "0.85em"
+      });
       deleteBtn.addEventListener("click", () => {
         this.deleteVault(vaultId, container);
       });
@@ -2542,55 +2643,67 @@ class ManageVaultsModal extends Modal {
 
     // Counts line
     const countsLine = card.createDiv();
-    countsLine.style.display = "flex";
-    countsLine.style.gap = "15px";
-    countsLine.style.fontSize = "0.9em";
-    countsLine.style.color = "var(--text-muted)";
+    countsLine.setCssStyles({
+      display: "flex",
+      gap: "15px",
+      fontSize: "0.9em",
+      color: "var(--text-muted)"
+    });
 
     const notesEl = countsLine.createDiv();
-    notesEl.createSpan({ text: "📄 Notes: " }).style.color = "var(--text-normal)";
-    notesEl.createSpan({ text: String(noteCount) }).style.fontWeight = "bold";
+    notesEl.createSpan({ text: "📄 Notes: " }).setCssStyles({ color: "var(--text-normal)" });
+    notesEl.createSpan({ text: String(noteCount) }).setCssStyles({ fontWeight: "bold" });
 
     const binariesEl = countsLine.createDiv();
-    binariesEl.createSpan({ text: "📁 Binary Files: " }).style.color = "var(--text-normal)";
-    binariesEl.createSpan({ text: String(binaryCount) }).style.fontWeight = "bold";
+    binariesEl.createSpan({ text: "📁 Binary Files: " }).setCssStyles({ color: "var(--text-normal)" });
+    binariesEl.createSpan({ text: String(binaryCount) }).setCssStyles({ fontWeight: "bold" });
 
     // Devices Section
     const devicesContainer = card.createDiv();
-    devicesContainer.style.borderTop = "1px solid var(--border-color)";
-    devicesContainer.style.paddingTop = "8px";
-    devicesContainer.style.marginTop = "4px";
+    devicesContainer.setCssStyles({
+      borderTop: "1px solid var(--border-color)",
+      paddingTop: "8px",
+      marginTop: "4px"
+    });
 
     const devicesHeader = devicesContainer.createEl("div", { text: "Connected Devices:" });
-    devicesHeader.style.fontWeight = "600";
-    devicesHeader.style.fontSize = "0.85em";
-    devicesHeader.style.color = "var(--text-muted)";
-    devicesHeader.style.marginBottom = "12px";
+    devicesHeader.setCssStyles({
+      fontWeight: "600",
+      fontSize: "0.85em",
+      color: "var(--text-muted)",
+      marginBottom: "12px"
+    });
 
     if (devices.length === 0) {
       const noDevices = devicesContainer.createEl("div", { text: "No registered devices." });
-      noDevices.style.fontStyle = "italic";
-      noDevices.style.fontSize = "0.85em";
-      noDevices.style.color = "var(--text-muted)";
+      noDevices.setCssStyles({
+        fontStyle: "italic",
+        fontSize: "0.85em",
+        color: "var(--text-muted)"
+      });
     } else {
       const devicesList = devicesContainer.createDiv();
-      devicesList.style.display = "flex";
-      devicesList.style.flexDirection = "column";
-      devicesList.style.gap = "8px";
+      devicesList.setCssStyles({
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px"
+      });
 
       for (const d of devices) {
         const deviceRow = devicesList.createDiv();
-        deviceRow.style.display = "flex";
-        if (Platform.isMobile) {
-          deviceRow.style.flexDirection = "column";
-          deviceRow.style.alignItems = "flex-start";
-          deviceRow.style.gap = "2px";
-        } else {
-          deviceRow.style.flexDirection = "row";
-          deviceRow.style.justifyContent = "space-between";
-          deviceRow.style.alignItems = "center";
-        }
-        deviceRow.style.fontSize = "0.85em";
+        deviceRow.setCssStyles({
+          display: "flex",
+          fontSize: "0.85em",
+          ...(Platform.isMobile ? {
+            flexDirection: "column",
+            alignItems: "flex-start",
+            gap: "2px"
+          } : {
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center"
+          })
+        });
 
         const isThisDevice = isCurrentVault && d.device_name === this.plugin.settings.deviceName;
 
@@ -2599,12 +2712,14 @@ class ManageVaultsModal extends Modal {
         nameEl.createSpan({ text: `💻 ${d.device_name}${platformStr}` });
         if (isThisDevice) {
           const suffix = nameEl.createSpan({ text: " (this device)" });
-          suffix.style.fontWeight = "bold";
-          suffix.style.color = "var(--text-accent)";
+          suffix.setCssStyles({
+            fontWeight: "bold",
+            color: "var(--text-accent)"
+          });
         }
 
         const syncTimeEl = deviceRow.createDiv();
-        syncTimeEl.style.color = "var(--text-muted)";
+        syncTimeEl.setCssStyles({ color: "var(--text-muted)" });
         if (d.last_sync_at) {
           const syncDate = new Date(d.last_sync_at);
           syncTimeEl.setText(`Last Sync: ${syncDate.toLocaleString()}`);
@@ -2625,10 +2740,12 @@ class ManageVaultsModal extends Modal {
     container.empty();
     const deletingEl = container.createDiv();
     deletingEl.setText(`Permanently deleting vault "${vaultId}"... Please wait.`);
-    deletingEl.style.padding = "20px";
-    deletingEl.style.textAlign = "center";
-    deletingEl.style.fontWeight = "bold";
-    deletingEl.style.color = "var(--text-accent)";
+    deletingEl.setCssStyles({
+      padding: "20px",
+      textAlign: "center",
+      fontWeight: "bold",
+      color: "var(--text-accent)"
+    });
 
     try {
       if (!this.plugin.supabase || !this.plugin.currentUserId) {
@@ -2636,7 +2753,7 @@ class ManageVaultsModal extends Modal {
       }
 
       // 1. Fetch all binary files for this vault ID to delete from storage
-      const { data: filesToDelete, error: fetchError } = await this.plugin.supabase
+      const { data, error: fetchError } = await this.plugin.supabase
         .from("obsidian_vault_files")
         .select("path")
         .eq("user_id", this.plugin.currentUserId)
@@ -2645,6 +2762,7 @@ class ManageVaultsModal extends Modal {
 
       if (fetchError) throw fetchError;
 
+      const filesToDelete = data as { path: string }[] | null;
       if (filesToDelete && filesToDelete.length > 0) {
         const binaryPaths = filesToDelete.map(f => `${this.plugin.currentUserId}/${vaultId}/${f.path}`);
 
@@ -2681,9 +2799,10 @@ class ManageVaultsModal extends Modal {
 
       new Notice(`Vault "${vaultId}" and all its remote files have been permanently deleted.`);
 
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to delete vault:", err);
-      new Notice(`Failed to delete vault: ${err.message || err}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      new Notice(`Failed to delete vault: ${errorMsg}`);
     } finally {
       // Refresh the modal content
       this.loadVaultsData(container);
