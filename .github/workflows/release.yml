@@ -36,11 +36,9 @@ jobs:
           node .github/scripts/generate-changelog.js "${{ github.ref_name }}"
 
       - name: Attest Build Provenance
-        uses: actions/attest@v1
+        uses: actions/attest-build-provenance@v2
         with:
-          subject-path: |
-            main.js
-            manifest.json
+          subject-path: main.js
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
