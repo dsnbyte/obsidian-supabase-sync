@@ -1,7 +1,7 @@
 {
   "id": "supabase-vault-sync",
   "name": "Supabase Vault Sync",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "minAppVersion": "1.13.0",
   "description": "Sync your vault notes and attachments to Supabase.",
   "author": "Dsnify",
