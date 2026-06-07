@@ -1,93 +1,53 @@
 # Supabase Vault Sync for Obsidian
 
-An offline-first, high-performance Obsidian plugin that bidirectionally synchronizes your vault notes to a Supabase Postgres database (with frontmatter metadata) and binary attachments to Supabase Storage.
-
-> [!NOTE]
-> This is an unofficial way to sync Obsidian vaults. [Obsidian Sync](https://obsidian.md/sync) is the officially supported option.
+An offline-first, high-performance Obsidian plugin that bidirectionally synchronizes vault notes to a Supabase PostgreSQL database (including frontmatter metadata) and binary attachments to Supabase Storage.
 
 > [!WARNING]
-> **Backup Your Vault First!**
-> Please make a complete backup of your local Obsidian vault before installing or configuring this plugin. Since this plugin performs bidirectional synchronization and direct file system writes/deletions, having a fresh backup ensures your notes are completely safe during initial setup and testing.
+> Back up your local Obsidian vault before installing or configuring this plugin. Although this plugin includes safeguards to prevent accidental file deletion, a fresh backup is highly recommended during initial setup and testing.
 
----
+**Note:** This is an unofficial sync solution. [Obsidian Sync](https://obsidian.md/sync) is the officially supported service.
+
 
 ## Features
 
 - **Offline-First Architecture**: Changes are tracked locally in a robust sync queue and synchronized metadata registry. If you are offline, all changes queue up safely and sync automatically once you re-establish a connection.
 - **Secure Authentication**: Users authenticate securely with Email & Password. Sessions are managed and persistent across Obsidian restarts.
-- **Strict Row Level Security (RLS)**: Database tables utilize strict Postgres RLS policies (`auth.uid() = user_id`) to ensure no user can ever access another user's vault data.
-- **Private Storage Bucket & Folder Isolation**: Attachment assets are stored in a private bucket using the path `{user_id}/{vault_id}/{file_path}` with strict owner policies.
-- **Namespace Vault ID Isolation**: Sync multiple vaults with ease using alphanumeric Vault IDs (max 10 characters). Changing Vault ID automatically triggers a remote database migration of your vault data.
-- **Device Tracking & Hostname Auto-Detection**: Connected devices (Desktop/Mobile/Tablet) are registered to the database, automatically reading your computer's OS hostname on desktop.
+- **Strict Row Level Security (RLS)**: Database tables utilize strict Postgres RLS policies to ensure no user can ever access another user's vault data.
+- **Private Storage Bucket & Folder Isolation**: Attachment assets are stored in a private bucket with strict owner policies.
+- **Namespace Vault ID Isolation**: Enables seamless synchronization across multiple independent vaults.
+- **Device Tracking**: Connected devices (Desktop/Mobile/Tablet) are registered to the database.
 - **Rich Postgres & Bidirectional Sync**: Notes are structured as Postgres records, and pulls are automatically executed since your last sync.
-- **Debounced Settings Input**: 1-second debounce on critical inputs like Vault ID and Device Name prevents heavy database overhead while typing.
-- **Customizable Retention & Server Maintenance**: Automatic and manual purging of old soft-deleted files from Postgres and Storage.
 - **Database Vaults Management**: View all vaults in your Supabase database, track connected sync devices, display file and note counts, and permanently delete inactive vaults.
 
----
 
-## Synchronization Strategy
+## How It Works
 
-This plugin operates on strict offline-first, data-safety guarantees to ensure that your local notes and remote data are safely merged without any data loss.
+This plugin uses an offline-first, event-driven architecture to keep your notes and attachments in sync:
 
-Please refer to the dedicated **[Sync Strategy Guide](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/docs/SYNC_STRATEGY.md)** for:
-- Detailed data-safety guarantees
-- Decision flowcharts and resolution rules
-- Scenario matrix for conflict resolution, deletions, and merges
+1. **Local Event Queue**: As you create, edit, or delete files, the plugin tracks these changes locally. If you are offline, these events are queued safely.
+2. **Metadata Cache**: The plugin maintains a local registry of file paths, last-modified timestamps, and SHA-256 hashes. This allows it to instantly identify changes and avoid redundant uploads or downloads.
+3. **Dual-Channel Sync**:
+   - **Markdown Notes**: Synchronized directly with PostgreSQL database rows. Frontmatter properties are parsed into a queryable JSONB column, while tags and titles are indexed in dedicated fields.
+   - **Binary Attachments**: Uploaded to/deleted from a private Supabase Storage bucket, organized securely under your Supabase User ID.
+4. **Conflict Resolution**: When files are edited on multiple devices, conflicts are resolved using robust, safety-first rules (e.g., comparing hashes and timestamps) to prevent data loss. For details, see the **[Sync Strategy Guide](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/docs/SYNC_STRATEGY.md)**.
+5. **Security First**: Everything is protected by strict **Row Level Security (RLS)** policies. Your vault data can only be read or written by your authenticated user session.
+6. **100% Privacy & Zero Telemetry**: The sync engine runs entirely on your local client device, and all data is transmitted directly to your own self-hosted or managed Supabase project. No analytics, tracking, or telemetry data is ever collected or shared.
 
----
 
-## Supabase Database & Storage Setup
+## Quick Start
 
-> **New to Supabase?** Read the beginner-friendly **[Supabase Setup Guide](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/docs/SUPABASE_SETUP.md)** for step-by-step instructions.
+1. Create a project in [Supabase](https://supabase.com/).
+2. Open the **SQL Editor** in your Supabase Dashboard and run the contents of [schema.sql](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/schema.sql) to initialize the database tables, performance indexes, and storage bucket.
+3. Enable Email/Password authentication in your Supabase project under **Authentication** -> **Providers**.
+4. Get Supabase Project URL and API Key from your Supabase Dashboard.
+4. Install the plugin in your Obsidian vault.
+5. Configure the plugin in Obsidian Settings.
+6. Perform an initial sync.
 
-Before using the plugin, you must configure your Supabase instance. Run the content of [schema.sql](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/schema.sql) in the Supabase SQL Editor. This script:
-- Creates the `obsidian_vault_files` table with all metadata columns and a composite primary key `(user_id, vault_id, path)`.
-- Enables Row Level Security (RLS) on `obsidian_vault_files` to allow authenticated users to perform operations only on their own rows (`auth.uid() = user_id`).
-- Creates the `obsidian_sync_devices` table to track connected devices (enforcing RLS for owner access only).
-- Optimizes querying with a GIN index on the `properties` column of `obsidian_vault_files`.
-- Registers a private storage bucket called `obsidian-vault-binaries` for media attachments.
-- Configures strict storage bucket access control policies (`SELECT`, `INSERT`, `DELETE`) limiting operations to the folder prefix corresponding to the user's ID (`auth.uid()::text`).
+For a detailed step-by-step setup guide, see the **[Supabase Setup Guide](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/docs/SUPABASE_SETUP.md)**.
 
----
 
-## Installation in Obsidian
-
-> [!NOTE]
-> This plugin is currently undergoing review for the official Obsidian Community Plugins store. Until it is officially approved and listed, please use one of the installation methods below.
-
-To install and enable this plugin in your Obsidian vault, choose one of the following methods:
-
-### Option A: Install via BRAT (Recommended for Beta Users)
-Using the [Obsidian42 - BRAT](https://github.com/tfthacker/obsidian42-brat) plugin is the easiest way to install and receive updates automatically:
-1. Install **Obsidian42 - BRAT** from the Community Plugins directory in Obsidian.
-2. Enable the BRAT plugin.
-3. Open BRAT settings: **Settings** -> **BRAT**.
-4. Click **Add Beta plugin** under *Beta Plugin List*.
-5. Enter the repository URL: `https://github.com/dsnbyte/obsidian-supabase-sync`.
-6. Click **Add Plugin**. BRAT will download and install the latest release files automatically.
-7. Go to **Community Plugins** and toggle **Supabase Vault Sync** to **On**.
-
-### Option B: Manual Installation
-1. Download the latest release from the [Releases page](https://github.com/dsnbyte/obsidian-supabase-sync/releases).
-2. Under your vault's plugin directory, create a new folder:
-   ```
-   <your-vault-path>/.obsidian/plugins/obsidian-supabase-sync/
-   ```
-3. Copy the following files into that folder:
-   - `main.js`
-   - `manifest.json`
-4. Reload plugins or restart Obsidian.
-
-### Enabling the Plugin
-1. Open Obsidian and go to **Settings** -> **Community plugins**.
-2. If **Community plugins** are not enabled, enable them.
-3. Locate **Supabase Vault Sync** in the list of installed plugins.
-4. Toggle the switch to **On**.
-
----
-
-## How to Use
+## Usage
 
 ### 1. Configuration
 1. Open Obsidian **Settings** -> **Supabase Vault Sync**.
@@ -125,8 +85,15 @@ You can easily back up your synchronized files in the Supabase database by expor
 3. Click **Export Database**.
 4. The plugin will query Supabase for all records matching the current user and vault ID and download a compiled `.sql` file named `<vault_id>-backup-<timestamp>.sql` containing full `INSERT ... ON CONFLICT DO UPDATE` statements. This file can be run directly in your Supabase SQL Editor to restore or seed your vault data.
 
----
+
+## Documentation
+
+For more in-depth information, check out the following guides:
+- **[Supabase Setup Guide](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/docs/SUPABASE_SETUP.md)**: Detailed instructions on configuring tables, indexes, and storage.
+- **[Sync Strategy Guide](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/docs/SYNC_STRATEGY.md)**: Details on the offline-first sync mechanism, safety guarantees, and conflict resolution rules.
+- **[Development Guide](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/docs/DEV_GUIDE.md)**: Information on setting up the project locally, and building.
+
 
 ## License
 
-[MIT](https://github.com/dsnbyte/obsidian-supabase-sync/blob/main/LICENSE)
+MIT. See [LICENSE](LICENSE).
