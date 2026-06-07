@@ -329,6 +329,7 @@ export default class SupabaseSyncPlugin extends Plugin {
     }
 
     this.settings.vaultId = newVaultId;
+    this.deviceId = null; // Clear old device ID to register/fetch a new device ID for the new vault
     await this.saveSettings();
 
     // Re-register device under new vault_id

@@ -174,16 +174,21 @@ export async function registerDevice(plugin: SupabaseSyncPlugin): Promise<void> 
   }
 
   try {
+    const payload: any = {
+      user_id: plugin.currentUserId,
+      vault_id: plugin.settings.vaultId,
+      device_name: plugin.settings.deviceName,
+      platform: Platform.isDesktop ? "Desktop" : Platform.isMobile ? "Mobile" : "Tablet",
+      updated_at: new Date().toISOString()
+    };
+    if (plugin.deviceId) {
+      payload.id = plugin.deviceId;
+    }
+
     const { data, error } = await plugin.supabase
       .from("obsidian_sync_devices")
-      .upsert({
-        user_id: plugin.currentUserId,
-        vault_id: plugin.settings.vaultId,
-        device_name: plugin.settings.deviceName,
-        platform: Platform.isDesktop ? "Desktop" : Platform.isMobile ? "Mobile" : "Tablet",
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: "user_id,vault_id,device_name"
+      .upsert(payload, {
+        onConflict: plugin.deviceId ? "id" : "user_id,vault_id,device_name"
       })
       .select("id")
       .maybeSingle();

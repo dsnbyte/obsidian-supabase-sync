@@ -670,6 +670,40 @@ export class VaultSetupModal extends Modal {
         return;
       }
 
+      // Check if device name already exists in DB for this vault
+      try {
+        if (this.plugin.supabase && this.plugin.currentUserId) {
+          let checkQuery = this.plugin.supabase
+            .from("obsidian_sync_devices")
+            .select("id")
+            .eq("user_id", this.plugin.currentUserId)
+            .eq("vault_id", finalVaultId)
+            .eq("device_name", this.deviceNameValue)
+            .not("last_sync_at", "is", null);
+
+          if (this.plugin.deviceId) {
+            checkQuery = checkQuery.neq("id", this.plugin.deviceId);
+          }
+
+          const { data: existingDevices, error: deviceError } = await checkQuery.limit(1);
+
+          if (deviceError) throw deviceError;
+
+          if (existingDevices && existingDevices.length > 0) {
+            this.showAlert(
+              alertContainer,
+              `Device name "${this.deviceNameValue}" is already in use for this vault. Please choose a different device name.`
+            );
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("VaultSetupModal: Device name check error:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        this.showAlert(alertContainer, `Failed to check device name: ${msg}`);
+        return;
+      }
+
       // --- Save ---
       this.isSaving = true;
       saveBtn.setText("Saving…");
@@ -715,11 +749,12 @@ export class VaultSetupModal extends Modal {
     const alertEl = container.createEl("p", { text: message });
     alertEl.setCssStyles({
       color: "var(--text-error)",
-      backgroundColor: "var(--background-modifier-error)",
+      backgroundColor: "var(--background-primary-alt)",
+      border: "1px solid var(--text-error)",
       borderRadius: "4px",
       padding: "8px 12px",
       fontSize: "0.88em",
-      margin: "0 0 0.5em 0"
+      margin: "0.75em 0 0.5em 0"
     });
   }
 

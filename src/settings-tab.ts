@@ -201,6 +201,8 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
           button
             .setButtonText("Log Out")
             .onClick(async () => {
+              const confirmed = await this.plugin.showConfirm("Are you sure you want to log out from Supabase?");
+              if (!confirmed) return;
               await this.plugin.signOut();
               this.render();
             })
@@ -294,7 +296,6 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
       .addButton((btn) =>
         btn
           .setButtonText("Change Vault")
-          .setIcon("pencil")
           .onClick(() => {
             new VaultSetupModal(this.app, this.plugin, () => this.render()).open();
           })
