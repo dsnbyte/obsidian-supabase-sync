@@ -173,8 +173,17 @@ export async function registerDevice(plugin: SupabaseSyncPlugin): Promise<void> 
     await plugin.saveSettings();
   }
 
+  interface DeviceRegistrationPayload {
+    id?: string;
+    user_id: string;
+    vault_id: string;
+    device_name: string;
+    platform: string;
+    updated_at: string;
+  }
+
   try {
-    const payload: any = {
+    const payload: DeviceRegistrationPayload = {
       user_id: plugin.currentUserId,
       vault_id: plugin.settings.vaultId,
       device_name: plugin.settings.deviceName,

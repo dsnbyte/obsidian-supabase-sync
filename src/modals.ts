@@ -617,95 +617,97 @@ export class VaultSetupModal extends Modal {
     const saveBtn = buttonRow.createEl("button", { text: "Save & Start Sync" });
     saveBtn.addClass("mod-cta");
 
-    saveBtn.addEventListener("click", async () => {
-      if (this.isSaving) return;
+    saveBtn.addEventListener("click", () => {
+      void (async () => {
+        if (this.isSaving) return;
 
-      alertContainer.empty();
+        alertContainer.empty();
 
-      // Resolve the final vault ID
-      let finalVaultId: string;
-      if (this.isCreatingNew) {
-        finalVaultId = (newVaultInput?.value ?? this.newVaultIdValue).trim();
-        if (!finalVaultId) {
-          this.showAlert(alertContainer, "Please enter a vault ID.");
-          return;
-        }
-
-        // Check if new vault ID already exists in DB
-        try {
-          if (this.plugin.supabase && this.plugin.currentUserId) {
-            const { data: existing, error: checkError } = await this.plugin.supabase
-              .from("obsidian_vault_files")
-              .select("vault_id")
-              .eq("user_id", this.plugin.currentUserId)
-              .eq("vault_id", finalVaultId)
-              .limit(1);
-
-            if (checkError) throw checkError;
-
-            if (existing && existing.length > 0) {
-              this.showAlert(
-                alertContainer,
-                `Vault ID "${finalVaultId}" already exists in the database. Choose a different name or select it from the dropdown above.`
-              );
-              return;
-            }
+        // Resolve the final vault ID
+        let finalVaultId: string;
+        if (this.isCreatingNew) {
+          finalVaultId = (newVaultInput?.value ?? this.newVaultIdValue).trim();
+          if (!finalVaultId) {
+            this.showAlert(alertContainer, "Please enter a vault ID.");
+            return;
           }
+
+          // Check if new vault ID already exists in DB
+          try {
+            if (this.plugin.supabase && this.plugin.currentUserId) {
+              const { data: existing, error: checkError } = await this.plugin.supabase
+                .from("obsidian_vault_files")
+                .select("vault_id")
+                .eq("user_id", this.plugin.currentUserId)
+                .eq("vault_id", finalVaultId)
+                .limit(1);
+
+              if (checkError) throw checkError;
+
+              if (existing && existing.length > 0) {
+                this.showAlert(
+                  alertContainer,
+                  `Vault ID "${finalVaultId}" already exists in the database. Choose a different name or select it from the dropdown above.`
+                );
+                return;
+              }
+            }
+          } catch (err) {
+            console.error("VaultSetupModal: DB check error:", err);
+            const msg = err instanceof Error ? err.message : String(err);
+            this.showAlert(alertContainer, `Failed to check vault ID: ${msg}`);
+            return;
+          }
+        } else {
+          finalVaultId = this.selectedVaultId;
+          if (!finalVaultId) {
+            this.showAlert(alertContainer, "Please select a vault ID.");
+            return;
+          }
+        }
+
+        if (!this.deviceNameValue) {
+          this.showAlert(alertContainer, "Please enter a device name.");
+          return;
+        }
+        // --- Save ---
+        this.isSaving = true;
+        saveBtn.setText("Saving…");
+        saveBtn.setAttr("disabled", "true");
+        cancelBtn.setAttr("disabled", "true");
+
+        try {
+          // Save device name first
+          this.plugin.settings.deviceName = this.deviceNameValue;
+
+          // Update vault ID (handles migration/confirmation internally)
+          const success = await this.plugin.updateVaultId(finalVaultId, !this.isCreatingNew);
+          if (!success) {
+            // User cancelled the confirm dialog inside updateVaultId
+            return;
+          }
+
+          await this.plugin.saveSettings();
+          await this.plugin.registerDevice();
+
+          new Notice("Vault setup complete! Starting sync…");
+          this.close();
+
+          // Trigger sync after modal close
+          window.setTimeout(() => {
+            void this.plugin.runSync();
+          }, 300);
         } catch (err) {
-          console.error("VaultSetupModal: DB check error:", err);
+          console.error("VaultSetupModal: save error:", err);
           const msg = err instanceof Error ? err.message : String(err);
-          this.showAlert(alertContainer, `Failed to check vault ID: ${msg}`);
-          return;
+          this.showAlert(alertContainer, `Error: ${msg}`);
+        } finally {
+          this.isSaving = false;
+          saveBtn.setText("Save & Start Sync");
+          saveBtn.removeAttribute("disabled");
+          cancelBtn.removeAttribute("disabled");
         }
-      } else {
-        finalVaultId = this.selectedVaultId;
-        if (!finalVaultId) {
-          this.showAlert(alertContainer, "Please select a vault ID.");
-          return;
-        }
-      }
-
-      if (!this.deviceNameValue) {
-        this.showAlert(alertContainer, "Please enter a device name.");
-        return;
-      }
-      // --- Save ---
-      this.isSaving = true;
-      saveBtn.setText("Saving…");
-      saveBtn.setAttr("disabled", "true");
-      cancelBtn.setAttr("disabled", "true");
-
-      try {
-        // Save device name first
-        this.plugin.settings.deviceName = this.deviceNameValue;
-
-        // Update vault ID (handles migration/confirmation internally)
-        const success = await this.plugin.updateVaultId(finalVaultId, !this.isCreatingNew);
-        if (!success) {
-          // User cancelled the confirm dialog inside updateVaultId
-          return;
-        }
-
-        await this.plugin.saveSettings();
-        await this.plugin.registerDevice();
-
-        new Notice("Vault setup complete! Starting sync…");
-        this.close();
-
-        // Trigger sync after modal close
-        window.setTimeout(() => {
-          void this.plugin.runSync();
-        }, 300);
-      } catch (err) {
-        console.error("VaultSetupModal: save error:", err);
-        const msg = err instanceof Error ? err.message : String(err);
-        this.showAlert(alertContainer, `Error: ${msg}`);
-      } finally {
-        this.isSaving = false;
-        saveBtn.setText("Save & Start Sync");
-        saveBtn.removeAttribute("disabled");
-        cancelBtn.removeAttribute("disabled");
-      }
+      })();
     });
   }
 

@@ -322,7 +322,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
         text.inputEl.type = "number";
         text.inputEl.min = "1";
         text.inputEl.max = "300";
-        text.inputEl.style.width = "80px";
+        text.inputEl.setCssStyles({ width: "80px" });
         text.setValue(String(this.plugin.settings.syncDelay || 2));
         text.onChange(async (value) => {
           const num = parseInt(value, 10);
@@ -341,7 +341,7 @@ export class SupabaseSyncSettingTab extends PluginSettingTab {
         text.inputEl.type = "number";
         text.inputEl.min = "0";
         text.inputEl.max = "86400";
-        text.inputEl.style.width = "80px";
+        text.inputEl.setCssStyles({ width: "80px" });
         text.setValue(String(this.plugin.settings.syncInterval || 0));
         text.onChange(async (value) => {
           const num = parseInt(value, 10);
