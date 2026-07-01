@@ -31,7 +31,7 @@ export function stopIntervalSync(): void {
 
 function handleIntervalSync(plugin: SupabaseSyncPlugin): void {
   // Check if the app is hidden/minimized (very battery-friendly, especially on mobile)
-  if (activeDocument.hidden) {
+  if (typeof document !== "undefined" && document.hidden) {
     console.log("Supabase Sync: Obsidian is in the background. Skipping interval sync to save battery.");
     return;
   }
