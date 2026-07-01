@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-07-01
+
+### Bug Fixes
+
+* **ios**: Resolve activeDocument crash and auth session storage infinite re-init loop (872b7f8)
+
+### Other Changes
+
+* Merge pull request #2 from dsnbyte/1-issues-with-sync-on-ios-app (d83696a)
+
+
 ## [1.1.1] - 2026-06-07
 
 ### Bug Fixes
