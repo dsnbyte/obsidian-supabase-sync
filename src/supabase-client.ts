@@ -48,11 +48,11 @@ async function initSupabaseClientImmediate(plugin: SupabaseSyncPlugin): Promise<
             },
             setItem: async (_key: string, value: string) => {
               plugin.settings.authSession = value;
-              await plugin.saveSettings();
+              await plugin.saveData(plugin.settings);
             },
             removeItem: async (_key: string) => {
               plugin.settings.authSession = null;
-              await plugin.saveSettings();
+              await plugin.saveData(plugin.settings);
             }
           }
         }
