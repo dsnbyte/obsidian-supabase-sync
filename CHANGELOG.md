@@ -2,9 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.1.3] - 2026-09-12
 
-### Bug Fixes
+### Other Changes
 
 * Expand file-size metadata from PostgreSQL `integer` to `bigint` and provide a backward-compatible migration for existing Supabase projects.
 
