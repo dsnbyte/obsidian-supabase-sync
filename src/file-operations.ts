@@ -4,6 +4,45 @@ import type { RemoteFile } from "./types";
 import { getSHA256Hash, getMimeType } from "./utils";
 import { saveSyncQueue, saveSyncMetadata } from "./state";
 
+const POSTGRES_INTEGER_MAX_BYTES = 2_147_483_647;
+
+export class DatabaseMigrationRequiredError extends Error {
+  constructor(filePath: string) {
+    super(
+      `Cannot sync "${filePath}" because its size exceeds 2 GB and the Supabase database still uses the old integer column. Run the latest schema.sql in the Supabase SQL Editor, then retry sync.`
+    );
+    this.name = "DatabaseMigrationRequiredError";
+  }
+}
+
+async function ensureLargeFileSizeSupported(
+  plugin: SupabaseSyncPlugin,
+  file: TFile
+): Promise<void> {
+  if (file.stat.size <= POSTGRES_INTEGER_MAX_BYTES) return;
+
+  // This read-only filter is valid for bigint but returns PostgreSQL error 22003
+  // when the legacy integer column tries to parse a value above its range.
+  const { error } = await plugin.supabase!
+    .from("obsidian_vault_files")
+    .select("path")
+    .eq("user_id", plugin.currentUserId)
+    .gt("size", POSTGRES_INTEGER_MAX_BYTES + 1)
+    .limit(1);
+
+  if (!error) return;
+
+  const isLegacyIntegerColumn =
+    error.code === "22003" ||
+    error.message.toLowerCase().includes("out of range for type integer");
+
+  if (isLegacyIntegerColumn) {
+    throw new DatabaseMigrationRequiredError(file.path);
+  }
+
+  throw error;
+}
+
 // --- Obsidian Event Handlers ---
 
 export async function handleFileChange(
@@ -179,6 +218,8 @@ export async function uploadFile(
 ): Promise<void> {
   const file = plugin.app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) return;
+
+  await ensureLargeFileSizeSupported(plugin, file);
 
   if (isBinary) {
     await uploadBinary(plugin, file);

@@ -34,6 +34,24 @@ Once your project is ready, we need to create the database tables to store your 
 
 > **What did this do?** This script automatically created the `obsidian_vault_files` table (for your notes), the `obsidian_sync_devices` table (to track your devices), and a secure storage bucket named `obsidian-vault-binaries` (for your images and PDFs). It also enabled strict **Row Level Security (RLS)** to guarantee that your data is completely isolated and private.
 
+### Upgrading an Existing Installation
+
+If you configured this plugin using an older version of `schema.sql`, run the latest
+`schema.sql` again in the Supabase SQL Editor. It includes a backward-compatible
+migration that changes `obsidian_vault_files.size` from `integer` to `bigint` while
+preserving existing records.
+
+Alternatively, run only this migration:
+
+```sql
+ALTER TABLE IF EXISTS public.obsidian_vault_files
+    ALTER COLUMN size TYPE bigint
+    USING size::bigint;
+```
+
+The plugin continues to sync files up to 2 GB with the old schema. Files above that
+limit require this migration before they can be synchronized.
+
 ---
 
 ## Step 3: Create Your User Account

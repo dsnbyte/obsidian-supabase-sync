@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS obsidian_vault_files (
     content text,
     is_binary boolean DEFAULT false,
     mime_type text,
-    size integer,
+    size bigint,
     hash text,
     properties jsonb DEFAULT '{}'::jsonb,
     
@@ -23,6 +23,12 @@ CREATE TABLE IF NOT EXISTS obsidian_vault_files (
     
     PRIMARY KEY (user_id, vault_id, path)
 );
+
+-- Upgrade existing installations created before file sizes used bigint.
+-- This widening conversion is safe to run again and preserves existing values.
+ALTER TABLE IF EXISTS public.obsidian_vault_files
+    ALTER COLUMN size TYPE bigint
+    USING size::bigint;
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE obsidian_vault_files ENABLE ROW LEVEL SECURITY;

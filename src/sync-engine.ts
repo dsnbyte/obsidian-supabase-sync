@@ -1,7 +1,7 @@
 import { TFile, Notice } from "obsidian";
 import type SupabaseSyncPlugin from "./main";
 import type { RemoteFile } from "./types";
-import { uploadFile, deleteFileRemote, writeRemoteFileToLocal, deleteLocalFileRespectingSettings, isLocallyModified } from "./file-operations";
+import { DatabaseMigrationRequiredError, uploadFile, deleteFileRemote, writeRemoteFileToLocal, deleteLocalFileRespectingSettings, isLocallyModified } from "./file-operations";
 import { saveSyncQueue, saveSyncMetadata } from "./state";
 import { updateDeviceLastSync } from "./supabase-client";
 import { getSHA256Hash } from "./utils";
@@ -109,7 +109,11 @@ export async function runSync(plugin: SupabaseSyncPlugin): Promise<void> {
   } catch (e) {
     console.error("Error during sync:", e);
     plugin.updateStatusBar("Error");
-    new Notice("Sync failed: Check Supabase settings or network connection.");
+    if (e instanceof DatabaseMigrationRequiredError) {
+      new Notice(e.message, 15_000);
+    } else {
+      new Notice("Sync failed: Check Supabase settings or network connection.");
+    }
   } finally {
     plugin.isSyncing = false;
   }
